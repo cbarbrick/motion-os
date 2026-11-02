@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.netlify/
+.env*
+!.env.example
+*.tsbuildinfo
+output/
+supabase/.temp/
+.DS_Store
+*.log
