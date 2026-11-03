@@ -8,7 +8,7 @@ This repository contains the `motion-team-os` application. See [CONTRIBUTING.md]
 
 ## Approval needed, November 3, 2026
 
-The former David’s approval page is now **Approval needed**, at the existing `#affiliates` route. Any member can submit an Athlete, Project, Person, Affiliate or Other request and choose a joined teammate under **Request approval from**. **Needs my approval** shows the signed-in teammate’s pending requests. Pending review and All requests show the wider workspace queue; cards identify each approver.
+The former David’s approval page is now **Approval needed**, at the existing `#affiliates` route. **Submit for approval** has just **Request approval from**, **Title**, and **Description**. Submission type, category, budget and the entire More details section have been removed from the request editor. Existing saved information is retained, and older local drafts restore only the fields still shown. New submissions use the existing general request type. **Needs my approval** shows the signed-in teammate’s pending requests. Pending review and All requests show the wider workspace queue; cards identify each approver.
 
 Only the request’s selected approver can approve, deny or reopen it. They can also use **Details & notes → Add note** without deciding or changing its status. Other workspace members can contribute notes. The requester or workspace owner can change the approver; reassignment and edits to reviewed terms require a fresh decision while retaining attributed notes and decision history. Athlete roster records remain active without approvals. People requests use the same per-request selection.
 

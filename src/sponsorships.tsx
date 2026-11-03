@@ -237,7 +237,7 @@ export function Sponsorships({
                               ? "Role not added"
                               : "Category not added")}
                     </span>
-                    {!athlete && (
+                    {!athlete && (s.rate || !approval) && (
                       <strong className="profile-rate">
                         {s.rate || "Cost / rate not added"}
                       </strong>
@@ -586,6 +586,16 @@ function SponsorshipDetails({
         Number.isInteger(draft.version)
       ) {
         draftBase.current = draft.version;
+        if (approval)
+          return {
+            ...(proposal
+              ? sponsorshipInputOf(proposal)
+              : blankSponsorship(type)),
+            athlete_name: draft.form.athlete_name,
+            proposal: draft.form.proposal || "",
+            reviewer_id:
+              draft.form.reviewer_id ?? proposal?.reviewer_id ?? null,
+          };
         return { ...blankSponsorship(type), ...draft.form };
       }
     } catch {}
@@ -674,9 +684,11 @@ function SponsorshipDetails({
     if (running.current) return null;
     if (!valid(latest.current)) {
       setError(
-        athlete
-          ? "Add a name and use https:// for links."
-          : "Add a name or title, choose an approver, and use https:// for links.",
+        approval
+          ? "Add a title and choose an approver."
+          : athlete
+            ? "Add a name and use https:// for links."
+            : "Add a name, choose an approver, and use https:// for links.",
       );
       return null;
     }
@@ -870,64 +882,46 @@ function SponsorshipDetails({
               </small>
             </label>
           )}
-          {approval && !record && (
+          <div className={approval ? undefined : "form-grid"}>
             <label>
-              Submission type
-              <select
-                value={form.record_type}
-                onChange={(e) => change("record_type", e.target.value)}
-              >
-                {Object.entries(approvalTypes).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {approval && record && (
-            <p className="field-caption">
-              {approvalTypeLabel(record.record_type)} request
-            </p>
-          )}
-          <div className="form-grid">
-            <label>
-              {athlete || proposedAthlete
-                ? "Athlete name"
-                : general
-                  ? "Title"
+              {approval
+                ? "Title"
+                : athlete || proposedAthlete
+                  ? "Athlete name"
                   : "Name"}
               <input
                 value={form.athlete_name}
                 maxLength={180}
                 onChange={(e) => change("athlete_name", e.target.value)}
-                placeholder={general ? "What needs approval?" : "Full name"}
+                placeholder={approval ? "What needs approval?" : "Full name"}
                 autoFocus
               />
             </label>
-            <label>
-              {athlete || proposedAthlete
-                ? "Sport"
-                : person
-                  ? "Role"
-                  : "Category"}
-              <input
-                value={form.sport}
-                maxLength={100}
-                onChange={(e) => change("sport", e.target.value)}
-                placeholder={
-                  athlete || proposedAthlete
-                    ? "MMA"
-                    : person
-                      ? "Videographer"
-                      : general
-                        ? "Optional"
-                        : "Fitness creator"
-                }
-              />
-            </label>
+            {!approval && (
+              <label>
+                {athlete || proposedAthlete
+                  ? "Sport"
+                  : person
+                    ? "Role"
+                    : "Category"}
+                <input
+                  value={form.sport}
+                  maxLength={100}
+                  onChange={(e) => change("sport", e.target.value)}
+                  placeholder={
+                    athlete || proposedAthlete
+                      ? "MMA"
+                      : person
+                        ? "Videographer"
+                        : general
+                          ? "Optional"
+                          : "Fitness creator"
+                  }
+                />
+              </label>
+            )}
           </div>
-          {!athlete && (
+          {!athlete && !approval && (
             <label>
               {general || proposedAthlete
                 ? "Proposed cost / budget"
@@ -962,98 +956,98 @@ function SponsorshipDetails({
               }
             />
           </label>
-          <details className="more-details">
-            <summary>More details</summary>
-            <div className="details-body">
-              <label>
-                {approval ? "Supporting link" : "Profile link"}
-                <input
-                  type="url"
-                  value={form.profile_url}
-                  maxLength={2000}
-                  onChange={(e) => change("profile_url", e.target.value)}
-                  placeholder="https://..."
-                />
-              </label>
-              {/^https:\/\//.test(form.profile_url) && (
-                <a
-                  className="text-button"
-                  href={form.profile_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open link <ExternalLink size={14} />
-                </a>
-              )}
-              <label>
-                Contact
-                <input
-                  value={form.contact}
-                  maxLength={300}
-                  onChange={(e) => change("contact", e.target.value)}
-                  placeholder="Email, handle or agent"
-                />
-              </label>
-              <label>
-                {general ? "Background" : person ? "Experience" : "Audience"}
-                <textarea
-                  rows={2}
-                  value={form.audience}
-                  maxLength={1000}
-                  onChange={(e) => change("audience", e.target.value)}
-                  placeholder={
-                    general
-                      ? "Relevant context"
-                      : person
-                        ? "Previous work"
-                        : "Audience details"
-                  }
-                />
-              </label>
+          {!approval && (
+            <details className="more-details">
+              <summary>More details</summary>
+              <div className="details-body">
+                <label>
+                  Profile link
+                  <input
+                    type="url"
+                    value={form.profile_url}
+                    maxLength={2000}
+                    onChange={(e) => change("profile_url", e.target.value)}
+                    placeholder="https://..."
+                  />
+                </label>
+                {/^https:\/\//.test(form.profile_url) && (
+                  <a
+                    className="text-button"
+                    href={form.profile_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open link <ExternalLink size={14} />
+                  </a>
+                )}
+                <label>
+                  Contact
+                  <input
+                    value={form.contact}
+                    maxLength={300}
+                    onChange={(e) => change("contact", e.target.value)}
+                    placeholder="Email, handle or agent"
+                  />
+                </label>
+                <label>
+                  {general ? "Background" : person ? "Experience" : "Audience"}
+                  <textarea
+                    rows={2}
+                    value={form.audience}
+                    maxLength={1000}
+                    onChange={(e) => change("audience", e.target.value)}
+                    placeholder={
+                      general
+                        ? "Relevant context"
+                        : person
+                          ? "Previous work"
+                          : "Audience details"
+                    }
+                  />
+                </label>
 
-              <label>
-                {approval
-                  ? "Budget / support details"
-                  : person
-                    ? "Additional costs"
-                    : "Budget"}
-                <textarea
-                  rows={2}
-                  value={form.requested_support}
-                  maxLength={4000}
-                  onChange={(e) => change("requested_support", e.target.value)}
-                  placeholder="Cash, product, event support, travel or other terms"
-                />
-              </label>
-              <label>
-                {general || person ? "Scope of work" : "Deliverables"}
-                <textarea
-                  rows={3}
-                  value={form.deliverables}
-                  maxLength={4000}
-                  onChange={(e) => change("deliverables", e.target.value)}
-                  placeholder={
-                    general
-                      ? "What will be delivered or completed?"
-                      : "Posts, videos, appearances, usage rights and quantities"
-                  }
-                />
-              </label>
-              <label>
-                {general
-                  ? "Timeline / deadline"
-                  : person
-                    ? "Availability"
-                    : "Partnership dates"}
-                <input
-                  value={form.timing}
-                  maxLength={1000}
-                  onChange={(e) => change("timing", e.target.value)}
-                  placeholder="Campaign window, event date or proposed start"
-                />
-              </label>
-            </div>
-          </details>
+                <label>
+                  {person ? "Additional costs" : "Budget"}
+                  <textarea
+                    rows={2}
+                    value={form.requested_support}
+                    maxLength={4000}
+                    onChange={(e) =>
+                      change("requested_support", e.target.value)
+                    }
+                    placeholder="Cash, product, event support, travel or other terms"
+                  />
+                </label>
+                <label>
+                  {general || person ? "Scope of work" : "Deliverables"}
+                  <textarea
+                    rows={3}
+                    value={form.deliverables}
+                    maxLength={4000}
+                    onChange={(e) => change("deliverables", e.target.value)}
+                    placeholder={
+                      general
+                        ? "What will be delivered or completed?"
+                        : "Posts, videos, appearances, usage rights and quantities"
+                    }
+                  />
+                </label>
+                <label>
+                  {general
+                    ? "Timeline / deadline"
+                    : person
+                      ? "Availability"
+                      : "Partnership dates"}
+                  <input
+                    value={form.timing}
+                    maxLength={1000}
+                    onChange={(e) => change("timing", e.target.value)}
+                    placeholder="Campaign window, event date or proposed start"
+                  />
+                </label>
+              </div>
+            </details>
+          )}
         </fieldset>
         {record && athlete && (
           <section className="athlete-schedule">
