@@ -2,7 +2,7 @@
 
 ## Local setup
 
-Use Node.js 22.12 or newer and npm. Clone the private repository after accepting your GitHub invitation:
+Use Node.js 22.12 or newer and npm. The repository is public; collaborators must accept their GitHub invitation before pushing branches to it:
 
 ```sh
 git clone https://github.com/cbarbrick/motion-os.git
@@ -13,6 +13,8 @@ npm run dev
 ```
 
 Open the local URL printed by Vite. With the example environment values left blank, choose **View sample** to develop the interface using browser-only sample data. This is enough to work on layouts and most interaction flows. Your local edits to sample records do not change the live workspace.
+
+The Calendar page embeds the real shared Google Calendar, including in sample mode. Viewing its events requires a separate Google session and the calendar owner's sharing permission. The embed is a view into Google Calendar; it does not synchronize events with Motion's database. Use **Open Google Calendar** for sign-in or editing and **Refresh** to reload the embed.
 
 Connected sign-in and database work need separate environment configuration and authorized access. Coordinate that with Charlotte before using live resources. Localhost is not currently an allowed authentication redirect. Reuse the resources documented in README.md; do not create replacement production projects.
 

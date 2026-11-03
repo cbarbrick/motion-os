@@ -2484,3 +2484,19 @@ body:has(dialog[open]) { overflow: hidden; }
   .heading { align-items: stretch; flex-direction: column; }
   .calendar-heading > div { margin-left: 0; }
 }
+
+.google-calendar { min-width: 0; }
+.google-calendar-heading { align-items: center; flex-wrap: wrap; gap: 18px; margin-bottom: 12px; }
+.google-calendar-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.google-calendar-actions .button { min-height: 44px; text-decoration: none; }
+.google-calendar-help { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 12px 0 18px; }
+.google-calendar-frame { overflow: hidden; background: #fff; }
+.google-calendar-frame iframe { display: block; border: 0; width: 100%; height: max(600px, calc(100dvh - 280px)); }
+.saved-motion-events { margin-top: 24px; }
+.saved-motion-events > summary { padding: 20px; font-size: 15px; font-weight: 700; cursor: pointer; }
+.saved-motion-events > p { padding: 0 20px 16px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media(max-width:650px) {
+  .google-calendar-heading { align-items: stretch; flex-direction: column; }
+  .google-calendar-actions .button { flex: 1 1 auto; justify-content: center; }
+  .google-calendar-frame iframe { height: max(560px, calc(100dvh - 220px)); }
+}

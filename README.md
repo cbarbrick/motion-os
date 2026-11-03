@@ -6,6 +6,16 @@ Motion’s shared workspace for people, weekly deliverables, athletes, affiliate
 
 This repository contains the `motion-team-os` application. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the branch/pull-request workflow. New contributors can run the app in sample mode without production credentials. GitHub access and live app membership are managed separately.
 
+## Google Calendar update, November 3, 2026
+
+The Calendar page now embeds the **Executive Assistant** Google Calendar selected by the workspace owner. It uses Google's official embed, the calendar's Eastern time zone, a week view on larger screens and a schedule view on phones. The Google Calendar controls let viewers change dates and views. **Refresh** reloads the embedded calendar; **Open Google Calendar** opens it separately for sign-in and, when permitted, editing.
+
+Google's existing sharing permissions still apply. A Motion OS login or access to this public GitHub repository does not grant calendar access. Viewers must also be signed into a Google account the calendar is shared with. Browsers that block embedded Google sign-in may require opening Google Calendar separately. The calendar has not been made public, and no event data, Google access tokens or private iCal feed URLs are stored in the repository or copied into Supabase. The embedded calendar remains live in sample mode and is labeled accordingly.
+
+The old Motion calendar grid has been replaced. Existing Motion event records, linked tasks and athlete links are preserved and accessible under **Previously saved Motion events** or through the corresponding athlete/task. These records do not synchronize with Google Calendar. The existing account persistence, tasks, people, athletes, affiliates, ideas and private to-dos remain in place.
+
+Verification: all 45 existing tests and the production build pass. Browser checks show actual shared Google events inside the app, working week navigation and refresh, a schedule layout at 390px and 320px with no page overflow, preserved Motion event access, and working Tasks navigation. Google calendar sharing was not changed. Actual iPhone home-screen Google-session behavior still requires device acceptance.
+
 ## Simplified workspace update, October 27
 
 Tasks is the first navigation item and the default landing view. My tasks, All tasks, person filters and Team week are in one place. The task list is vertical, includes all assigned people and supports checkoff, assignment and taking unassigned work. Task creation starts with title, people, due date and notes. Other saved fields remain under More details. People, athlete, affiliate, idea and private to-do forms also keep optional fields collapsed. Review cards use explicit Approve/Deny buttons with no sideways drag.
