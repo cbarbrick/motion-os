@@ -407,8 +407,8 @@ export function App() {
                       <PanelTitle
                         title="Unassigned tasks"
                         subtitle=""
-                        action="All tasks"
-                        onAction={() => go("tasks", "all")}
+                        action="View unassigned"
+                        onAction={() => go("tasks", "unassigned")}
                       />
                       <div className="list">
                         {unclaimed.slice(0, 3).map((t) => (
@@ -1179,10 +1179,7 @@ function Board({
   onPlan: (person: string | null, week: string) => void;
 }) {
   const [tab, setTab] = useState(
-    content || initialScope !== "mine" ? "all" : "mine",
-  );
-  const [person, setPerson] = useState(
-    initialScope === "unassigned" ? "unassigned" : "all",
+    content || initialScope !== "mine" ? "unassigned" : "mine",
   );
   const [category, setCategory] = useState(content ? "Content" : "all");
   const [query, setQuery] = useState("");
@@ -1191,11 +1188,7 @@ function Board({
       (i) =>
         i.kind === "task" &&
         (tab !== "mine" || isOnTask(i, userId)) &&
-        (tab !== "all" ||
-          person === "all" ||
-          (person === "unassigned"
-            ? !taskPeople(i).length
-            : isOnTask(i, person))) &&
+        (tab !== "unassigned" || !taskPeople(i).length) &&
         (category === "all" || i.category === category) &&
         i.title.toLowerCase().includes(query.toLowerCase()),
     )
@@ -1254,12 +1247,7 @@ function Board({
             className="button primary"
             onClick={() =>
               onCreate({
-                assignee_id:
-                  tab === "mine"
-                    ? userId
-                    : !["all", "unassigned"].includes(person)
-                      ? person
-                      : null,
+                assignee_id: tab === "mine" ? userId : null,
               })
             }
           >
@@ -1271,7 +1259,7 @@ function Board({
       <div className="tabs task-tabs" aria-label="Task views">
         {[
           ["mine", "My tasks"],
-          ["all", "All tasks"],
+          ["unassigned", "Unassigned tasks"],
           ["week", "Team week"],
         ].map(([id, label]) => (
           <button
@@ -1295,23 +1283,8 @@ function Board({
         />
       ) : (
         <>
-          {tab === "all" && (
+          {tab === "unassigned" && (
             <div className="task-filters">
-              <label>
-                Person
-                <select
-                  value={person}
-                  onChange={(e) => setPerson(e.target.value)}
-                >
-                  <option value="all">Everyone</option>
-                  <option value="unassigned">Unassigned</option>
-                  {data.members.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <details className="more-details task-filter-details">
                 <summary>Filter</summary>
                 <div className="details-body">
@@ -1353,7 +1326,11 @@ function Board({
             {active.map(renderTask)}
             {!active.length && (
               <Empty
-                title={tab === "mine" ? "No tasks assigned to you" : "No tasks"}
+                title={
+                  tab === "mine"
+                    ? "No tasks assigned to you"
+                    : "No unassigned tasks"
+                }
                 text=""
               />
             )}
