@@ -37,7 +37,7 @@ const profileLabels = {
   athlete: { singular: "Athlete", plural: "Athletes", add: "Add athlete" },
   approval: {
     singular: "Request",
-    plural: "David's approval",
+    plural: "Approval needed",
     add: "Submit for approval",
   },
   person: { singular: "Person", plural: "People", add: "Add person" },
@@ -59,13 +59,7 @@ export function Sponsorships({
     [filter, setFilter] = useState("all"),
     [category, setCategory] = useState("all"),
     [query, setQuery] = useState(""),
-    [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false),
-    [mode, setMode] = useState(type === "athlete" ? "list" : "review");
-  const owner = data.workspace.owner_id === store.userId;
-  const reviewer = data.members.find(
-    (m) => m.user_id === data.sponsorshipReviewer,
-  );
+    [mode, setMode] = useState(type === "athlete" ? "list" : "mine");
   const approval = type === "approval";
   const records = data.sponsorships.filter((s) =>
     approval
@@ -87,18 +81,6 @@ export function Sponsorships({
   const copy = profileLabels[type];
   const selectedRecord =
     data.sponsorships.find((s) => s.id === selected) || null;
-  async function chooseReviewer(id: string) {
-    setBusy(true);
-    setMessage("");
-    try {
-      await store.setSponsorshipReviewer(id || null);
-      setMessage("Reviewer saved");
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <>
       <div className={`heading${approval ? " approval-heading" : ""}`}>
@@ -107,7 +89,7 @@ export function Sponsorships({
           {approval && (
             <p>
               Submit athletes, projects, people, affiliates, or anything else
-              for David to approve.
+              and choose a teammate to review it.
             </p>
           )}
         </div>
@@ -117,43 +99,22 @@ export function Sponsorships({
         </button>
       </div>
       {!athlete && (
-        <section className="panel sponsorship-reviewer">
-          <div>
-            <h2>Reviewer{reviewer ? `: ${reviewer.name}` : " not selected"}</h2>
-            <p>
-              {reviewer
-                ? "Reviews all requests in David's approval."
-                : "Requests can be submitted now. Select David as reviewer after he joins the workspace."}
-            </p>
-          </div>
-          {owner && (
-            <label>
-              Reviewer
-              <select
-                aria-label="Reviewer"
-                disabled={busy}
-                value={reviewer?.user_id || ""}
-                onChange={(e) => void chooseReviewer(e.target.value)}
-              >
-                <option value="">Select reviewer</option>
-                {data.members.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </section>
-      )}
-      {message && (
-        <p className="notice" role="status">
-          {message}
-        </p>
-      )}
-      {!athlete && (
         <div className="toolbar">
           <div className="tabs">
+            <button
+              className={mode === "mine" ? "active" : ""}
+              onClick={() => setMode("mine")}
+            >
+              Needs my approval{" "}
+              <span>
+                {
+                  records.filter(
+                    (s) =>
+                      s.status === "pending" && s.reviewer_id === store.userId,
+                  ).length
+                }
+              </span>
+            </button>
             <button
               className={mode === "review" ? "active" : ""}
               onClick={() => setMode("review")}
@@ -188,10 +149,14 @@ export function Sponsorships({
           )}
         </div>
       )}
-      {!athlete && mode === "review" ? (
+      {!athlete && mode !== "list" ? (
         <ReviewCards
           store={store}
-          records={records}
+          records={
+            mode === "mine"
+              ? records.filter((s) => s.reviewer_id === store.userId)
+              : records
+          }
           addLabel={copy.add}
           onOpen={(s) => setSelected(s.id)}
           onAdd={() => setSelected("new")}
@@ -278,6 +243,13 @@ export function Sponsorships({
                       </strong>
                     )}
                     {s.proposal && <p>{s.proposal}</p>}
+                    {!athlete && (
+                      <p className="muted">
+                        Approver:{" "}
+                        {data.members.find((m) => m.user_id === s.reviewer_id)
+                          ?.name || "Not assigned"}
+                      </p>
+                    )}
                     {!athlete && s.requested_support && (
                       <dl>
                         <dt>Requested support</dt>
@@ -406,7 +378,7 @@ function ReviewCards({
     .filter((s) => s.status === "pending")
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
   const current = pending.find((s) => !skipped.includes(s.id));
-  const canReview = store.data!.sponsorshipReviewer === store.userId;
+  const canReview = !!current && current.reviewer_id === store.userId;
   useEffect(() => {
     setNote("");
     setError("");
@@ -448,7 +420,14 @@ function ReviewCards({
       <div className="review-queue-info">
         <h2>{pending.length} pending</h2>
 
-        {!canReview && <p>Only the selected reviewer can decide.</p>}
+        {current && (
+          <p>
+            Approver:{" "}
+            {store.data!.members.find((m) => m.user_id === current.reviewer_id)
+              ?.name || "Choose a teammate"}
+            . {!canReview && "Only this teammate can decide."}
+          </p>
+        )}
       </div>
       {error && (
         <p className="notice error" role="alert">
@@ -505,7 +484,7 @@ function ReviewCards({
                 </p>
               )}
               <button className="text-button" onClick={() => onOpen(current)}>
-                Details & comments <ArrowRight size={17} />
+                Details & notes <ArrowRight size={17} />
               </button>
             </div>
           </article>
@@ -644,7 +623,7 @@ function SponsorshipDetails({
   latest.current = form;
   saveRef.current = store.saveSponsorship;
   const reviewer = store.data!.members.find(
-    (m) => m.user_id === store.data!.sponsorshipReviewer,
+    (m) => m.user_id === record?.reviewer_id,
   );
   const canReview = !athlete && !!reviewer && reviewer.user_id === store.userId;
   const history = store
@@ -674,7 +653,7 @@ function SponsorshipDetails({
       );
     }
   }
-  function change(field: keyof SponsorshipInput, value: string) {
+  function change(field: keyof SponsorshipInput, value: string | null) {
     const next = { ...latest.current, [field]: value };
     latest.current = next;
     setForm(next);
@@ -687,13 +666,18 @@ function SponsorshipDetails({
   function valid(input: SponsorshipInput) {
     return (
       !!input.athlete_name.trim() &&
+      (athlete || !!input.reviewer_id) &&
       (!input.profile_url || /^https:\/\//.test(input.profile_url))
     );
   }
   async function flush(): Promise<Sponsorship | null> {
     if (running.current) return null;
     if (!valid(latest.current)) {
-      setError("Add a name or title. Links must start with https://.");
+      setError(
+        athlete
+          ? "Add a name and use https:// for links."
+          : "Add a name or title, choose an approver, and use https:// for links.",
+      );
       return null;
     }
     running.current = true;
@@ -778,7 +762,7 @@ function SponsorshipDetails({
     try {
       await store.addSponsorshipComment(current.current, comment);
       changeComment("");
-      setMessage("Comment posted.");
+      setMessage(athlete ? "Comment posted." : "Note added.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -859,6 +843,33 @@ function SponsorshipDetails({
           <p className="notice">Editing details requires a new review.</p>
         )}
         <fieldset disabled={busy}>
+          {!athlete && (
+            <label>
+              Request approval from
+              <select
+                aria-label="Request approval from"
+                value={form.reviewer_id || ""}
+                disabled={
+                  !!record &&
+                  record.created_by !== store.userId &&
+                  store.data!.workspace.owner_id !== store.userId
+                }
+                onChange={(e) => change("reviewer_id", e.target.value || null)}
+              >
+                <option value="">Choose a teammate</option>
+                {store.data!.members.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.name}
+                    {m.user_id === store.userId ? " (you)" : ""}
+                  </option>
+                ))}
+              </select>
+              <small>
+                The chosen teammate can add notes and approve or decline this
+                request.
+              </small>
+            </label>
+          )}
           {approval && !record && (
             <label>
               Submission type
@@ -890,9 +901,7 @@ function SponsorshipDetails({
                 value={form.athlete_name}
                 maxLength={180}
                 onChange={(e) => change("athlete_name", e.target.value)}
-                placeholder={
-                  general ? "What needs David's approval?" : "Full name"
-                }
+                placeholder={general ? "What needs approval?" : "Full name"}
                 autoFocus
               />
             </label>
@@ -948,7 +957,7 @@ function SponsorshipDetails({
               onChange={(e) => change("proposal", e.target.value)}
               placeholder={
                 approval
-                  ? "What are you proposing, and what does David need to decide?"
+                  ? "What are you proposing, and what does the approver need to decide?"
                   : "Background and proposed work"
               }
             />
@@ -1108,14 +1117,14 @@ function SponsorshipDetails({
         )}
         {record && (
           <section className="sponsor-discussion">
-            <h3>{athlete ? "Comments" : "Comments & decisions"}</h3>
+            <h3>{athlete ? "Comments" : "Notes & decisions"}</h3>
             {!athlete && (
               <p>
                 {reviewer
                   ? canReview
-                    ? "You are the reviewer."
-                    : `Reviewer: ${reviewer.name}`
-                  : "Select a reviewer to enable decisions."}
+                    ? "You are the approver. Add a note or make a decision."
+                    : `Approver: ${reviewer.name}`
+                  : "Select an approver to enable decisions."}
               </p>
             )}
             <div className="sponsor-history">
@@ -1137,17 +1146,25 @@ function SponsorshipDetails({
                   {c.body && <p>{c.body}</p>}
                 </article>
               ))}
-              {!history.length && <p className="muted">No comments</p>}
+              {!history.length && (
+                <p className="muted">
+                  {athlete ? "No comments" : "No notes or decisions yet"}
+                </p>
+              )}
             </div>
             <label>
-              {athlete ? "Comment" : "Comment / decision note"}
+              {athlete ? "Comment" : "Note / decision note"}
               <textarea
                 rows={3}
                 value={comment}
                 maxLength={4000}
                 disabled={busy}
                 onChange={(e) => changeComment(e.target.value)}
-                placeholder="Write a comment"
+                placeholder={
+                  athlete
+                    ? "Write a comment"
+                    : "Add feedback, a question, or a decision note"
+                }
               />
             </label>
             <div className="sponsor-actions">
@@ -1157,7 +1174,7 @@ function SponsorshipDetails({
                 onClick={submitComment}
               >
                 <MessageSquare size={16} />
-                Post comment
+                {athlete ? "Post comment" : "Add note"}
               </button>
               {canReview && (
                 <>

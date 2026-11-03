@@ -157,6 +157,7 @@ export function isOnTask(item: Item, userId: string): boolean {
 export type ReviewStatus = "pending" | "approved" | "denied";
 export type SponsorshipStatus = ReviewStatus | "active";
 export interface SponsorshipInput {
+  reviewer_id: string | null;
   record_type:
     | "athlete"
     | "affiliate"
@@ -217,6 +218,7 @@ export function blankSponsorship(
 ): SponsorshipInput {
   return {
     record_type,
+    reviewer_id: null,
     rate: "",
     athlete_name: "",
     sport: "",
@@ -264,7 +266,7 @@ export const labels: Record<View, string> = {
   week: "My week",
   team_week: "Team week",
   sponsorships: "Athletes",
-  affiliates: "David's approval",
+  affiliates: "Approval needed",
   people: "People",
   tasks: "Tasks",
   events: "Calendar",
@@ -419,6 +421,7 @@ export function makeDemo(): Snapshot {
         ],
       ].map(([id, name, role, rate, description]): Sponsorship => ({
         ...blankSponsorship("person"),
+        reviewer_id: demoUser,
         id,
         workspace_id: w,
         athlete_name: name,
@@ -435,6 +438,7 @@ export function makeDemo(): Snapshot {
       })),
       {
         ...blankSponsorship("affiliate"),
+        reviewer_id: demoUser,
         id: "sample-affiliate",
         workspace_id: w,
         athlete_name: "Riley Brooks (sample)",

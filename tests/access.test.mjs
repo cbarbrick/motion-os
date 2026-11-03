@@ -73,14 +73,14 @@ test('revocation immediately blocks reads, writes, invite rejoining and legacy g
 });
 let sponsorship;
 test('members submit affiliates but cannot set decisions or bypass RPCs',async()=>{
- sponsorship=(await as(member,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'affiliate',athlete_name:'Potential affiliate',sport:'Running',requested_support:'Product and $500',deliverables:'Two videos'}])).rows[0];
+ sponsorship=(await as(member,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'affiliate',reviewer_id:member,athlete_name:'Potential affiliate',sport:'Running',requested_support:'Product and $500',deliverables:'Two videos'}])).rows[0];
  assert.equal(sponsorship.status,'pending');
  await assert.rejects(as(member,'select public.save_sponsorship($1,$2,$3,$4)',[w,sponsorship.id,sponsorship.version,{status:'approved'}]),/Unknown proposal fields/);
  await assert.rejects(as(member,"update public.sponsorships set status='approved' where id=$1",[sponsorship.id]),/permission denied/);
  await assert.rejects(as(outsider,'select public.save_sponsorship($1,null,0,$2)',[w,{athlete_name:'Unauthorized'}]),/Workspace access/);
  assert.equal((await as(outsider,'select * from public.sponsorships where workspace_id=$1',[w])).rows.length,0);
 });
-test('only the workspace owner selects a reviewer, and that reviewer must be a member',async()=>{
+test('legacy default settings remain owner-only; each request authorizes its selected approver',async()=>{
  await assert.rejects(as(member,'select public.set_sponsorship_reviewer($1,$2)',[w,member]),/owner access/);
  await assert.rejects(as(owner,'select public.set_sponsorship_reviewer($1,$2)',[w,outsider]),/workspace member/);
  await assert.rejects(as(owner,"select public.review_sponsorship($1,$2,'approved','')",[sponsorship.id,sponsorship.version]),/selected sponsorship reviewer/);
@@ -138,7 +138,7 @@ test('athlete fights are calendar events with shared content notes and linked ta
 });
 test('people profiles retain rate and description with reviewer decisions and undo history',async()=>{
  await as(owner,'select public.set_sponsorship_reviewer($1,$2)',[w,owner]);
- let person=(await as(owner,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'person',athlete_name:'Candidate',sport:'Videographer',rate:'$750 / day',proposal:'Event filming'}])).rows[0];
+ let person=(await as(owner,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'person',reviewer_id:owner,athlete_name:'Candidate',sport:'Videographer',rate:'$750 / day',proposal:'Event filming'}])).rows[0];
  assert.equal(person.record_type,'person');assert.equal(person.rate,'$750 / day');assert.equal(person.proposal,'Event filming');
  person=(await as(owner,"select * from public.review_sponsorship($1,$2,'approved','Approved for event')",[person.id,person.version])).rows[0];assert.equal(person.decided_by,owner);
  person=(await as(owner,"select * from public.review_sponsorship($1,$2,'pending','Decision undone')",[person.id,person.version])).rows[0];assert.equal(person.status,'pending');
@@ -239,7 +239,7 @@ test('athletes are active immediately and never enter the review queue',async()=
  await assert.rejects(as(owner,'select public.save_sponsorship($1,$2,1,$3)',[w,athlete.id,{sport:'Stale'}]),/changed/);
 });
 test('affiliates retain proposed commission, require review and cannot be calendar athletes',async()=>{
- const affiliate=(await as(owner,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'affiliate',athlete_name:'Affiliate creator',rate:'10% commission',proposal:'Training content'}])).rows[0];
+ const affiliate=(await as(owner,'select * from public.save_sponsorship($1,null,0,$2)',[w,{record_type:'affiliate',reviewer_id:owner,athlete_name:'Affiliate creator',rate:'10% commission',proposal:'Training content'}])).rows[0];
  assert.equal(affiliate.status,'pending');assert.equal(affiliate.rate,'10% commission');
  await assert.rejects(as(owner,"select public.save_item($1,'event',null,0,$2)",[w,{title:'Wrong athlete type',athlete_id:affiliate.id,starts_at:new Date().toISOString()}]),/Choose an athlete/);
  await assert.rejects(as(owner,"select public.review_sponsorship($1,$2,'active','')",[affiliate.id,affiliate.version]),/Invalid decision/);

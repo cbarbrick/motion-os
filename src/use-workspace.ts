@@ -87,6 +87,10 @@ function readPreview(): Snapshot {
                 ? null
                 : s.decided_at,
             rate: s.rate || "",
+            reviewer_id:
+              !s.record_type || s.record_type === "athlete"
+                ? null
+                : (s.reviewer_id ?? v.sponsorshipReviewer ?? null),
           })),
           items: v.items.map((i: Item) => ({
             ...i,
@@ -478,12 +482,30 @@ export function useWorkspace() {
     let updateNote: SponsorshipComment | null = null;
     if (preview) {
       if (
+        input.record_type !== "athlete" &&
+        !data.members.some((m) => m.user_id === input.reviewer_id)
+      )
+        throw new Error("Choose a teammate to approve this request");
+      if (
+        item &&
+        item.reviewer_id !== input.reviewer_id &&
+        item.created_by !== userId &&
+        data.workspace.owner_id !== userId
+      )
+        throw new Error(
+          "Only the requester or workspace owner can change the approver",
+        );
+      if (
         item &&
         JSON.stringify(sponsorshipInputOf(item)) === JSON.stringify(input)
       )
         return item;
       const now = new Date().toISOString();
-      if (item && item.record_type !== "athlete" && item.status !== "pending") {
+      if (
+        item &&
+        item.record_type !== "athlete" &&
+        (item.status !== "pending" || item.reviewer_id !== input.reviewer_id)
+      ) {
         updateNote = {
           id: crypto.randomUUID(),
           workspace_id: data.workspace.id,
@@ -491,7 +513,10 @@ export function useWorkspace() {
           author_id: userId,
           author_name:
             data.members.find((m) => m.user_id === userId)?.name || "You",
-          body: "Proposal changed. A new decision is needed.",
+          body:
+            item.reviewer_id !== input.reviewer_id
+              ? "Approver changed. A new decision is needed."
+              : "Proposal changed. A new decision is needed.",
           action: "updated",
           created_at: now,
         };
@@ -534,7 +559,7 @@ export function useWorkspace() {
       !preview &&
       item &&
       item.record_type !== "athlete" &&
-      item.status !== "pending"
+      (item.status !== "pending" || item.reviewer_id !== saved.reviewer_id)
     )
       void refresh();
     return saved;
@@ -586,7 +611,7 @@ export function useWorkspace() {
       throw new Error("Athletes do not require review");
     let saved: Sponsorship;
     if (preview) {
-      if (data?.sponsorshipReviewer !== userId)
+      if (item.reviewer_id !== userId)
         throw new Error("Only the selected reviewer can decide");
       saved = {
         ...item,
