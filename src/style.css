@@ -2557,3 +2557,14 @@ body:has(dialog[open]) { overflow: hidden; }
   .calendar-add-bottom { width:100%; justify-content:center; }
   .calendar-view-schedule .calendar { padding:16px; }
 }
+
+/* Put the calendar dates first on every screen size. */
+.calendar-filter-details { margin-left:auto; position:relative; }
+.calendar-filter-details > summary { cursor:pointer; padding:12px 14px; min-height:44px; font-size:13px; font-weight:600; }
+.calendar-filter-options { display:flex; gap:14px; flex-wrap:wrap; padding:14px; margin-top:8px; border:1px solid var(--line); border-radius:10px; background:white; }
+.calendar-layout + .calendar-sync-panel { margin-top:24px; }
+@media(max-width:650px) {
+  .calendar-filters { align-items:flex-start; margin-bottom:16px; }
+  .calendar-filter-details[open] { flex-basis:100%; }
+  .calendar-filters .tabs button { padding:10px 14px; }
+}

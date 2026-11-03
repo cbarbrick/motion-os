@@ -1360,9 +1360,7 @@ function Events({
     [selected, setSelected] = useState(""),
     [athlete, setAthlete] = useState("all"),
     [eventType, setEventType] = useState("all"),
-    [calendarView, setCalendarView] = useState(() =>
-      matchMedia("(max-width: 650px)").matches ? "schedule" : "month",
-    ),
+    [calendarView, setCalendarView] = useState("month"),
     [feed, setFeed] = useState<CalendarFeed | null>(null);
   const first = new Date(month),
     offset = (first.getDay() + 6) % 7;
@@ -1403,20 +1401,9 @@ function Events({
           </button>
         }
       </Heading>
-      <GoogleCalendar
-        preview={store.preview}
-        workspace={data.workspace.id}
-        owner={data.workspace.owner_id === store.userId}
-        session={store.session}
-        events={data.items.filter((i) => i.kind === "event")}
-        start={start}
-        end={end}
-        onFeed={setFeed}
-        onOpen={onOpen}
-      />
       <div className="toolbar calendar-filters">
         <div className="tabs" aria-label="Calendar view">
-          {["schedule", "month"].map((v) => (
+          {["month", "schedule"].map((v) => (
             <button
               key={v}
               aria-pressed={calendarView === v}
@@ -1430,30 +1417,40 @@ function Events({
             </button>
           ))}
         </div>
-        <label className="inline-label">
-          Athlete
-          <select value={athlete} onChange={(e) => setAthlete(e.target.value)}>
-            <option value="all">All athletes</option>
-            {data.sponsorships
-              .filter((s) => s.record_type === "athlete")
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.athlete_name}
-                </option>
+        <details className="calendar-filter-details">
+          <summary>
+            Filters{athlete !== "all" || eventType !== "all" ? " (active)" : ""}
+          </summary>
+          <div className="calendar-filter-options">
+            <label className="inline-label">
+              Athlete
+              <select
+                value={athlete}
+                onChange={(e) => setAthlete(e.target.value)}
+              >
+                <option value="all">All athletes</option>
+                {data.sponsorships
+                  .filter((s) => s.record_type === "athlete")
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.athlete_name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="tabs">
+              {["all", "fight", "event"].map((t) => (
+                <button
+                  key={t}
+                  className={eventType === t ? "active" : ""}
+                  onClick={() => setEventType(t)}
+                >
+                  {t === "all" ? "All" : t === "fight" ? "Fights" : "Events"}
+                </button>
               ))}
-          </select>
-        </label>
-        <div className="tabs">
-          {["all", "fight", "event"].map((t) => (
-            <button
-              key={t}
-              className={eventType === t ? "active" : ""}
-              onClick={() => setEventType(t)}
-            >
-              {t === "all" ? "All" : t === "fight" ? "Fights" : "Events"}
-            </button>
-          ))}
-        </div>
+            </div>
+          </div>
+        </details>
       </div>
       <div className={`calendar-layout calendar-view-${calendarView}`}>
         <section className="panel calendar">
@@ -1594,6 +1591,17 @@ function Events({
           </button>
         </section>
       </div>
+      <GoogleCalendar
+        preview={store.preview}
+        workspace={data.workspace.id}
+        owner={data.workspace.owner_id === store.userId}
+        session={store.session}
+        events={data.items.filter((i) => i.kind === "event")}
+        start={start}
+        end={end}
+        onFeed={setFeed}
+        onOpen={onOpen}
+      />
     </>
   );
 }
