@@ -27,6 +27,7 @@ import { Welcome, WorkspaceSetup, JoinInvitation, ResetPassword } from "./auth";
 import { Sponsorships } from "./sponsorships";
 import { Editor } from "./editor";
 import { GoogleCalendar } from "./google-calendar";
+import { calendarEntries, type CalendarFeed } from "./calendar-feed";
 import {
   eventStartDay,
   eventOnDay,
@@ -514,16 +515,9 @@ export function App() {
               )}
               {view === "events" && (
                 <>
-                  <GoogleCalendar
-                    key={data.workspace.id + String(store.preview)}
-                    preview={store.preview}
-                    workspace={data.workspace.id}
-                    owner={data.workspace.owner_id === store.userId}
-                    session={store.session}
-                    events={data.items.filter((i) => i.kind === "event")}
-                    onOpen={open}
-                  />
                   <Events
+                    key={data.workspace.id + String(store.preview)}
+                    store={store}
                     data={data}
                     onOpen={open}
                     onCreate={(day) =>
@@ -1351,10 +1345,12 @@ function Board({
 }
 function Events({
   data,
+  store,
   onOpen,
   onCreate,
 }: {
   data: Snapshot;
+  store: ReturnType<typeof useWorkspace>;
   onOpen: (i: Item) => void;
   onCreate: (day?: string) => void;
 }) {
@@ -1363,21 +1359,26 @@ function Events({
     ),
     [selected, setSelected] = useState(""),
     [athlete, setAthlete] = useState("all"),
-    [eventType, setEventType] = useState("all");
+    [eventType, setEventType] = useState("all"),
+    [calendarView, setCalendarView] = useState(() =>
+      matchMedia("(max-width: 650px)").matches ? "schedule" : "month",
+    ),
+    [feed, setFeed] = useState<CalendarFeed | null>(null);
   const first = new Date(month),
     offset = (first.getDay() + 6) % 7;
   first.setDate(first.getDate() - offset);
   const days = Array.from({ length: 42 }, (_, i) =>
     addDays(localDate(first), i),
   );
-  const events = data.items
-    .filter(
-      (i) =>
-        i.kind === "event" &&
-        (athlete === "all" || i.athlete_id === athlete) &&
-        (eventType === "all" || i.event_type === eventType),
-    )
-    .sort((a, b) => (a.starts_at || "").localeCompare(b.starts_at || ""));
+  const start = new Date(days[0] + "T00:00:00").toISOString();
+  const end = new Date(addDays(days[41], 1) + "T00:00:00").toISOString();
+  const currentFeed =
+    feed?.range_start === start && feed.range_end === end ? feed : null;
+  const events = calendarEntries(data.items, currentFeed).filter(
+    (e) =>
+      (athlete === "all" || e.item?.athlete_id === athlete) &&
+      (eventType === "all" || (e.item?.event_type || "event") === eventType),
+  );
   const shown = events.filter((e) =>
     selected
       ? eventOnDay(e, selected)
@@ -1387,7 +1388,11 @@ function Events({
   );
   return (
     <>
-      <Heading eyebrow="" title="Calendar" description="">
+      <Heading
+        eyebrow=""
+        title={feed?.connection ? "Google Calendar" : "Calendar"}
+        description=""
+      >
         {
           <button
             className="button primary"
@@ -1398,7 +1403,33 @@ function Events({
           </button>
         }
       </Heading>
+      <GoogleCalendar
+        preview={store.preview}
+        workspace={data.workspace.id}
+        owner={data.workspace.owner_id === store.userId}
+        session={store.session}
+        events={data.items.filter((i) => i.kind === "event")}
+        start={start}
+        end={end}
+        onFeed={setFeed}
+        onOpen={onOpen}
+      />
       <div className="toolbar calendar-filters">
+        <div className="tabs" aria-label="Calendar view">
+          {["schedule", "month"].map((v) => (
+            <button
+              key={v}
+              aria-pressed={calendarView === v}
+              className={calendarView === v ? "active" : ""}
+              onClick={() => {
+                setCalendarView(v);
+                setSelected("");
+              }}
+            >
+              {v === "schedule" ? "Schedule" : "Month"}
+            </button>
+          ))}
+        </div>
         <label className="inline-label">
           Athlete
           <select value={athlete} onChange={(e) => setAthlete(e.target.value)}>
@@ -1424,7 +1455,7 @@ function Events({
           ))}
         </div>
       </div>
-      <div className="calendar-layout">
+      <div className={`calendar-layout calendar-view-${calendarView}`}>
         <section className="panel calendar">
           <div className="calendar-heading">
             <h2>
@@ -1473,40 +1504,94 @@ function Events({
               </button>
             </div>
           </div>
-          <div className="calendar-weekdays">
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-          <div className="calendar-grid">
-            {days.map((d) => (
-              <button
-                key={d}
-                onClick={() => setSelected(selected === d ? "" : d)}
-                className={`calendar-day ${d.slice(0, 7) !== localDate(month).slice(0, 7) ? "outside" : ""} ${d === localDate() ? "today" : ""} ${d === selected ? "selected" : ""}`}
-                aria-label={`${dateLabel(d)} · ${events.filter((e) => eventOnDay(e, d)).length} events`}
-              >
-                <span>{Number(d.slice(8))}</span>
-                {events
-                  .filter((e) => eventOnDay(e, d))
-                  .map((e) => (
-                    <small key={e.id} title={e.title}>
-                      {e.title}
-                    </small>
-                  ))}
-              </button>
-            ))}
-          </div>
+          {calendarView === "month" && (
+            <>
+              <div className="calendar-weekdays">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                  <span key={d}>{d}</span>
+                ))}
+              </div>
+              <div className="calendar-grid">
+                {days.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setSelected(selected === d ? "" : d)}
+                    className={`calendar-day ${d.slice(0, 7) !== localDate(month).slice(0, 7) ? "outside" : ""} ${d === localDate() ? "today" : ""} ${d === selected ? "selected" : ""}`}
+                    aria-label={`${dateLabel(d)} · ${events.filter((e) => eventOnDay(e, d)).length} events`}
+                  >
+                    <span>{Number(d.slice(8))}</span>
+                    {events
+                      .filter((e) => eventOnDay(e, d))
+                      .map((e) => (
+                        <small key={e.id} title={e.title}>
+                          {e.title}
+                        </small>
+                      ))}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </section>
-        <section className="panel">
+        <section className="panel calendar-agenda">
           <PanelTitle
             title={selected ? dateLabel(selected) : "This month"}
             subtitle=""
           />
           {shown.map((e) => (
-            <EventSummary key={e.id} event={e} data={data} onOpen={onOpen} />
+            <article key={e.id} className="calendar-agenda-event">
+              <span
+                className={`calendar-event-source ${e.pending ? "pending" : ""}`}
+              >
+                {e.pending
+                  ? "Saving to Google…"
+                  : e.google
+                    ? "Google Calendar"
+                    : "Motion OS"}
+              </span>
+              {e.item ? (
+                <EventSummary event={e.item} data={data} onOpen={onOpen} />
+              ) : (
+                <details className="google-event-details">
+                  <summary>
+                    <span className="date-tile">
+                      <small>
+                        {dateLabel(eventStartDay(e), { month: "short" })}
+                      </small>
+                      <strong>
+                        {dateLabel(eventStartDay(e), { day: "numeric" })}
+                      </strong>
+                    </span>
+                    <span>
+                      <strong>{e.title}</strong>
+                      <small>
+                        {eventTimeLabel(e)}
+                        {e.location ? ` · ${e.location}` : ""}
+                      </small>
+                    </span>
+                  </summary>
+                  <p>{e.description || "No description"}</p>
+                </details>
+              )}
+            </article>
           ))}
-          {!shown.length && <Empty title="No events" text="" />}
+          {!shown.length && (
+            <Empty
+              title={
+                currentFeed?.connection
+                  ? "No Google Calendar events this month"
+                  : "No events"
+              }
+              text="Use New event to add something to the calendar."
+            />
+          )}
+          <button
+            className="button calendar-add-bottom"
+            onClick={() => onCreate(selected || undefined)}
+          >
+            <Plus size={17} />
+            New event
+          </button>
         </section>
       </div>
     </>

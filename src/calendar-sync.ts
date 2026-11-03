@@ -1,14 +1,8 @@
 import { supabase } from "./client";
-export type CalendarSync = {
-  item_id: string;
-  requested_version: number;
-  synced_version: number;
-  last_error: string | null;
-};
-export type CalendarConnection = { calendar_id: string; connected_by: string };
+export type { CalendarSync, CalendarConnection } from "./calendar-feed";
 export const pendingCalendarKey = "motion-calendar-connect";
 export async function calendarAction(
-  action: "connect" | "sync",
+  action: "connect" | "sync" | "events",
   workspace: string,
   extra: Record<string, unknown> = {},
 ) {
@@ -21,6 +15,7 @@ export async function calendarAction(
       Authorization: `Bearer ${data.session.access_token}`,
     },
     body: JSON.stringify({ workspace, ...extra }),
+    signal: AbortSignal.timeout(55000),
   });
   const result = await response.json();
   if (!response.ok)
@@ -29,5 +24,7 @@ export async function calendarAction(
 }
 export function kickCalendarSync(workspace: string) {
   // The SQL queue is durable. A missed browser request is retried by the worker.
-  void calendarAction("sync", workspace).catch(() => {});
+  void calendarAction("sync", workspace)
+    .then(() => window.dispatchEvent(new Event("motion-calendar-updated")))
+    .catch(() => {});
 }

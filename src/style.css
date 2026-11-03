@@ -2526,3 +2526,34 @@ body:has(dialog[open]) { overflow: hidden; }
 .push-settings h3{display:flex;align-items:center;gap:8px;font-size:15px;margin:0}
 .push-settings p{margin:9px 0}
 .push-actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+
+/* One shared Google event source, with a compact schedule on phones. */
+.google-calendar-label { display:flex; align-items:center; gap:9px; }
+.google-calendar-label svg { color:#4285f4; flex-shrink:0; }
+.google-connection-settings { margin-top:12px; font-size:13px; }
+.google-connection-settings summary { cursor:pointer; color:var(--muted); }
+.google-connection-settings .google-calendar-actions { margin-top:12px; }
+.calendar-sync-panel .google-calendar-help { margin-bottom:0; }
+.calendar-view-schedule { gap:16px; }
+.calendar-view-schedule .calendar { padding-bottom:16px; }
+.calendar-view-schedule .calendar-heading { margin-bottom:0; }
+.calendar-agenda-event { border-bottom:1px solid var(--line); padding:12px 0; }
+.calendar-agenda-event .event-summary { border-bottom:0; }
+.calendar-event-source { display:block; margin-left:72px; font-size:11px; color:#2563eb; font-weight:650; }
+.calendar-event-source.pending { color:#9a6700; }
+.google-event-details summary { display:flex; align-items:center; gap:16px; padding:12px 0; cursor:pointer; list-style:none; }
+.google-event-details summary::-webkit-details-marker { display:none; }
+.google-event-details summary > span:last-child { min-width:0; }
+.google-event-details strong, .google-event-details small { display:block; overflow-wrap:anywhere; }
+.google-event-details small { color:var(--muted); margin-top:4px; }
+.google-event-details p { margin:4px 0 16px 72px; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; }
+.calendar-add-bottom { margin-top:18px; }
+@media(max-width:650px) {
+  .calendar-sync-panel { margin-bottom:16px; }
+  .calendar-sync-heading { gap:8px; }
+  .calendar-sync-heading > .button { width:100%; justify-content:center; }
+  .calendar-filters { gap:10px; }
+  .calendar-agenda { padding:18px; }
+  .calendar-add-bottom { width:100%; justify-content:center; }
+  .calendar-view-schedule .calendar { padding:16px; }
+}

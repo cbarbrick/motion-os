@@ -177,3 +177,114 @@ export async function syncGoogleEvent(
     "Calendar changed during sync. Motion OS will retry automatically.",
   );
 }
+
+export function calendarRange(start: unknown, end: unknown) {
+  const stamp = (v: unknown) =>
+    typeof v === "string" &&
+    /^\d{4}-\d{2}-\d{2}T/.test(v) &&
+    Number.isFinite(Date.parse(v));
+  if (
+    !stamp(start) ||
+    !stamp(end) ||
+    Date.parse(end as string) <= Date.parse(start as string) ||
+    Date.parse(end as string) - Date.parse(start as string) > 62 * 86400000
+  )
+    throw new CalendarError(
+      "Choose a calendar range of up to two months.",
+      400,
+    );
+  return {
+    start: new Date(start as string).toISOString(),
+    end: new Date(end as string).toISOString(),
+  };
+}
+
+export async function listGoogleEvents(
+  token: string,
+  calendarId: string,
+  workspace: string,
+  start: string,
+  end: string,
+  fetcher = fetch,
+) {
+  const range = calendarRange(start, end);
+  const events: import("../../src/calendar-feed").GoogleEvent[] = [];
+  let page: string | undefined;
+  const seenPages = new Set<string>();
+  for (let count = 0; count < 10; count++) {
+    const query = new URLSearchParams({
+      timeMin: range.start,
+      timeMax: range.end,
+      singleEvents: "true",
+      orderBy: "startTime",
+      showDeleted: "false",
+      maxResults: "1000",
+      fields:
+        "nextPageToken,items(id,status,summary,description,location,start,end,recurringEventId,extendedProperties/private)",
+    });
+    if (page) query.set("pageToken", page);
+    const response = await googleRequest(
+      token,
+      `/calendars/${encodeURIComponent(calendarId)}/events?${query}`,
+      {},
+      fetcher,
+    );
+    if (!response.ok)
+      throw new CalendarError(
+        response.status === 401 || response.status === 403
+          ? "Google access is unavailable. The workspace owner can reconnect the calendar."
+          : "Google Calendar could not be loaded. Try refreshing again.",
+      );
+    const data = await response.json();
+    if (!data || (data.items !== undefined && !Array.isArray(data.items)))
+      throw new CalendarError(
+        "Google returned an incomplete calendar. Try refreshing again.",
+      );
+    for (const event of data.items || []) {
+      if (event.status === "cancelled") continue;
+      const allDay = !!event.start?.date;
+      const from = allDay
+        ? `${event.start.date}T00:00:00.000Z`
+        : event.start?.dateTime;
+      const to = allDay
+        ? `${event.end?.date}T00:00:00.000Z`
+        : event.end?.dateTime;
+      if (
+        !event.id ||
+        !from ||
+        !to ||
+        !Number.isFinite(Date.parse(from)) ||
+        !Number.isFinite(Date.parse(to))
+      )
+        throw new CalendarError(
+          "A Google event has invalid dates. Refresh or check it in Google Calendar.",
+        );
+      const meta = event.extendedProperties?.private;
+      const linked =
+        !event.recurringEventId &&
+        meta?.motionWorkspace === workspace &&
+        /^[0-9a-f-]{36}$/i.test(meta.motionItem || "");
+      events.push({
+        id: event.id,
+        title: event.summary || "Untitled event",
+        description: event.description || "",
+        location: event.location || "",
+        starts_at: from,
+        ends_at: to,
+        all_day: allDay,
+        motion_item: linked ? meta.motionItem : null,
+        motion_version:
+          linked && Number.isFinite(Number(meta.motionVersion))
+            ? Number(meta.motionVersion)
+            : 0,
+      });
+    }
+    page = data.nextPageToken;
+    if (!page) return events;
+    if (seenPages.has(page)) break;
+    seenPages.add(page);
+  }
+  throw new CalendarError(
+    "This date range has too many events to load completely. Try a smaller range.",
+  );
+}

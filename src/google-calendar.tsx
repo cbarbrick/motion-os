@@ -1,13 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays, ExternalLink, RefreshCw } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./client";
-import {
-  calendarAction,
-  pendingCalendarKey,
-  type CalendarConnection,
-  type CalendarSync,
-} from "./calendar-sync";
+import { calendarAction, pendingCalendarKey } from "./calendar-sync";
+import type { CalendarFeed } from "./calendar-feed";
 import type { Item } from "./model";
 
 export function GoogleCalendar({
@@ -16,6 +12,9 @@ export function GoogleCalendar({
   owner,
   session,
   events,
+  start,
+  end,
+  onFeed,
   onOpen,
 }: {
   preview: boolean;
@@ -23,50 +22,59 @@ export function GoogleCalendar({
   owner: boolean;
   session: Session | null;
   events: Item[];
+  start: string;
+  end: string;
+  onFeed: (feed: CalendarFeed | null) => void;
   onOpen: (event: Item) => void;
 }) {
-  const [connection, setConnection] = useState<CalendarConnection | null>(null);
-  const [sync, setSync] = useState<CalendarSync[]>([]);
-  const [busy, setBusy] = useState(false),
-    [message, setMessage] = useState(""),
-    [loaded, setLoaded] = useState(preview);
-  const connecting = useRef(false);
-  async function refresh() {
-    if (preview || !supabase) return;
-    const [c, s] = await Promise.all([
-      supabase
-        .from("calendar_connections")
-        .select("calendar_id,connected_by")
-        .eq("workspace_id", workspace)
-        .maybeSingle(),
-      supabase
-        .from("calendar_sync")
-        .select("item_id,requested_version,synced_version,last_error")
-        .eq("workspace_id", workspace),
-    ]);
-    if (c.error || s.error)
-      throw new Error(
-        "Could not load Google sync status. Your events are saved in Motion OS.",
-      );
-    setConnection(c.data);
-    setSync(s.data || []);
-    setLoaded(true);
-  }
+  const [feed, setFeed] = useState<CalendarFeed | null>(null);
+  const [busy, setBusy] = useState<"sync" | "connect" | null>(null);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(!preview);
+  const connecting = useRef(false),
+    requestId = useRef(0);
+  const refresh = useCallback(async () => {
+    if (preview) return null;
+    const id = ++requestId.current;
+    setLoading(true);
+    try {
+      const result: CalendarFeed = await calendarAction("events", workspace, {
+        start,
+        end,
+      });
+      if (id !== requestId.current) return null;
+      setFeed(result);
+      onFeed(result);
+      setError("");
+      return result;
+    } catch (e) {
+      if (id === requestId.current)
+        setError(
+          e instanceof Error ? e.message : "Could not refresh Google Calendar.",
+        );
+      return null;
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
+  }, [preview, workspace, start, end, onFeed]);
   useEffect(() => {
-    let active = true;
     const update = () => {
-      if (active && document.visibilityState === "visible")
-        void refresh().catch((e) => {
-          if (active) setMessage(e.message);
-        });
+      if (document.visibilityState === "visible") void refresh();
     };
     update();
-    const timer = setInterval(update, 10000);
+    const timer = setInterval(update, 30000);
+    window.addEventListener("focus", update);
+    window.addEventListener("motion-calendar-updated", update);
+    document.addEventListener("visibilitychange", update);
     return () => {
-      active = false;
+      ++requestId.current;
       clearInterval(timer);
+      window.removeEventListener("focus", update);
+      window.removeEventListener("motion-calendar-updated", update);
+      document.removeEventListener("visibilitychange", update);
     };
-  }, [workspace, preview]);
+  }, [refresh]);
   useEffect(() => {
     if (preview || !session || connecting.current) return;
     let pending;
@@ -85,36 +93,36 @@ export function GoogleCalendar({
       return;
     if (Date.now() - pending.at > 15 * 60000) {
       sessionStorage.removeItem(pendingCalendarKey);
-      setMessage("Google connection expired. Try connecting again.");
+      setError("Google connection expired. Try connecting again.");
       return;
     }
     if (!session.provider_refresh_token) return;
     connecting.current = true;
-    setBusy(true);
+    setBusy("connect");
     void calendarAction("connect", workspace, {
       refreshToken: session.provider_refresh_token,
     })
       .then(async () => {
         sessionStorage.removeItem(pendingCalendarKey);
-        // Keep Google refresh credentials only on the server after setup.
         await supabase!.auth.setSession({
           access_token: session.access_token,
           refresh_token: session.refresh_token,
         });
-        setMessage("Google Calendar connected. Saved events are syncing.");
+        setMessage("Google Calendar connected.");
         await calendarAction("sync", workspace);
         await refresh();
       })
-      .catch((e) => setMessage(e.message))
+      .catch((e) => setError(e.message))
       .finally(() => {
-        setBusy(false);
+        setBusy(null);
         connecting.current = false;
       });
-  }, [workspace, preview, session?.access_token]);
+  }, [workspace, preview, session?.access_token, refresh]);
   async function connect() {
     if (!supabase || !session || !owner || preview) return;
-    setBusy(true);
+    setBusy("connect");
     setMessage("");
+    setError("");
     sessionStorage.setItem(
       pendingCalendarKey,
       JSON.stringify({ workspace, user: session.user.id, at: Date.now() }),
@@ -132,26 +140,30 @@ export function GoogleCalendar({
       },
     });
     if (error) {
-      setMessage(error.message);
-      setBusy(false);
+      setError(error.message);
+      setBusy(null);
       sessionStorage.removeItem(pendingCalendarKey);
     }
   }
   async function syncNow() {
-    setBusy(true);
+    setBusy("sync");
     setMessage("");
     try {
       await calendarAction("sync", workspace);
-      await refresh();
+      const result = await refresh();
+      if (result?.connection) setMessage("Google Calendar refreshed.");
     } catch (e) {
-      setMessage((e as Error).message);
+      setError((e as Error).message);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
+  const connection = feed?.connection;
   const pending = events.filter(
     (e) =>
-      !sync.some((s) => s.item_id === e.id && s.synced_version >= e.version),
+      !feed?.sync.some(
+        (s) => s.item_id === e.id && s.synced_version >= e.version,
+      ),
   );
   return (
     <section
@@ -160,84 +172,104 @@ export function GoogleCalendar({
     >
       <div className="calendar-sync-heading">
         <div>
-          <strong>
+          <strong className="google-calendar-label">
+            <CalendarDays size={21} />
             {preview
               ? "Sample calendar"
               : connection
-                ? "Motion OS Google Calendar"
-                : "Connect our Google Calendar"}
+                ? "Motion OS · Google Calendar"
+                : "Google Calendar"}
           </strong>
           <p>
             {preview
               ? "Sample events stay in this browser."
               : connection
-                ? "Everyone in this workspace can add and edit events below. Changes sync to Google automatically."
-                : loaded
-                  ? "Everyone can plan events here. The workspace owner can connect Google once to create our calendar and sync saved events."
-                  : "Checking Google connection…"}
+                ? "Shared with your team. Add an event here to save it to Google Calendar."
+                : loading
+                  ? "Loading the shared Google Calendar…"
+                  : error
+                    ? "Google Calendar could not be loaded."
+                    : "Connect Google once, then everyone in this workspace can view and add events here."}
           </p>
         </div>
-        <div className="google-calendar-actions">
-          {!preview && connection && (
-            <button className="button" onClick={syncNow} disabled={busy}>
-              <RefreshCw size={16} />
-              Sync now
-            </button>
-          )}
-          {!preview && owner && (
-            <button className="button" onClick={connect} disabled={busy}>
-              {busy
-                ? "Connecting…"
-                : connection
-                  ? "Reconnect Google"
-                  : "Connect Google Calendar"}
-            </button>
-          )}
-          {!preview && connection && owner && (
-            <a
-              className="button"
-              href={`https://calendar.google.com/calendar/r?${new URLSearchParams({ authuser: session?.user.email || "" })}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink size={16} />
-              Open in Google
-            </a>
-          )}
-        </div>
+        {!preview && (
+          <button
+            className="button"
+            onClick={syncNow}
+            disabled={!!busy || loading}
+          >
+            <RefreshCw size={16} />
+            {busy === "sync" ? "Refreshing…" : "Refresh calendar"}
+          </button>
+        )}
       </div>
+      {error && (
+        <p className="notice error" role="alert">
+          {error}
+          {feed?.connection
+            ? " Showing the last loaded calendar and saved Motion events."
+            : " Saved Motion events are shown below."}
+        </p>
+      )}
       {message && (
         <p className="notice" role="status">
           {message}
         </p>
       )}
-      {!preview && loaded && (
+      {!preview && connection && !error && (
         <p className="google-calendar-help" role="status">
-          {!connection
-            ? "Google sync is waiting for the owner’s connection."
+          {loading
+            ? "Refreshing Google events…"
             : pending.length
-              ? `${pending.length} event${pending.length === 1 ? "" : "s"} waiting for Google sync.`
-              : "All Motion events are synced to Google."}
+              ? `${pending.length} event${pending.length === 1 ? "" : "s"} saving to Google. Your events are already saved in Motion OS.`
+              : `Loaded from Google Calendar · ${new Date(feed.fetched_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
         </p>
       )}
       {!preview &&
         pending.some(
-          (e) => sync.find((s) => s.item_id === e.id)?.last_error,
+          (e) => feed?.sync.find((s) => s.item_id === e.id)?.last_error,
         ) && (
           <ul className="calendar-sync-errors">
             {pending.map((e) => {
-              const error = sync.find((s) => s.item_id === e.id)?.last_error;
-              return error ? (
+              const issue = feed?.sync.find(
+                (s) => s.item_id === e.id,
+              )?.last_error;
+              return issue ? (
                 <li key={e.id}>
                   <button className="text-button" onClick={() => onOpen(e)}>
                     {e.title}
                   </button>
-                  : {error}
+                  : {issue}
                 </li>
               ) : null;
             })}
           </ul>
         )}
+      {!preview && owner && (
+        <details className="google-connection-settings">
+          <summary>Google connection</summary>
+          <div className="google-calendar-actions">
+            <button className="button" onClick={connect} disabled={!!busy}>
+              {busy === "connect"
+                ? "Connecting…"
+                : connection
+                  ? "Reconnect Google"
+                  : "Connect Google Calendar"}
+            </button>
+            {connection && (
+              <a
+                className="button"
+                href={`https://calendar.google.com/calendar/r?${new URLSearchParams({ authuser: session?.user.email || "" })}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={16} />
+                Open in Google
+              </a>
+            )}
+          </div>
+        </details>
+      )}
     </section>
   );
 }

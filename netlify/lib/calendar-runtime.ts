@@ -8,6 +8,8 @@ import {
   seal,
   unseal,
   syncGoogleEvent,
+  calendarRange,
+  listGoogleEvents,
 } from "./google-calendar";
 import type { Item } from "../../src/model";
 const env = (key: string) => Netlify.env.get(key) || "";
@@ -102,6 +104,60 @@ export async function authorize(
 async function connection(rt: Runtime, workspace: string) {
   const value = await rt.blobs.get(`connection/${workspace}`, { type: "text" });
   return value ? unseal<Connection>(value, rt.encryption) : null;
+}
+export async function readCalendar(
+  rt: Runtime,
+  workspace: string,
+  start: unknown,
+  end: unknown,
+) {
+  const range = calendarRange(start, end);
+  const [registered, sync] = await Promise.all([
+    rt.db
+      .from("calendar_connections")
+      .select("calendar_id,connected_by")
+      .eq("workspace_id", workspace)
+      .maybeSingle(),
+    rt.db
+      .from("calendar_sync")
+      .select("item_id,requested_version,synced_version,last_error")
+      .eq("workspace_id", workspace),
+  ]);
+  if (registered.error || sync.error)
+    throw new CalendarError(
+      "Could not read the calendar connection. Try refreshing again.",
+    );
+  const result: import("../../src/calendar-feed").CalendarFeed = {
+    connection: registered.data,
+    sync: sync.data || [],
+    events: [],
+    range_start: range.start,
+    range_end: range.end,
+    fetched_at: new Date().toISOString(),
+  };
+  if (!registered.data) return result;
+  const saved = await connection(rt, workspace);
+  if (
+    !saved ||
+    saved.calendarId !== registered.data.calendar_id ||
+    saved.owner !== registered.data.connected_by
+  )
+    throw new CalendarError(
+      "The workspace owner needs to reconnect Google Calendar.",
+    );
+  const token = await refreshGoogle(
+    saved.refreshToken,
+    rt.clientId,
+    rt.clientSecret,
+  );
+  result.events = await listGoogleEvents(
+    token,
+    saved.calendarId,
+    workspace,
+    range.start,
+    range.end,
+  );
+  return result;
 }
 export async function connect(
   rt: Runtime,
