@@ -19,7 +19,6 @@ import {
   Plus,
   Search,
   Users,
-  UserRound,
   WifiOff,
   X,
 } from "lucide-react";
@@ -60,7 +59,6 @@ const nav = [
   { id: "events", icon: CalendarDays },
   { id: "sponsorships", icon: Trophy },
   { id: "affiliates", icon: ClipboardCheck },
-  { id: "people", icon: UserRound },
   { id: "ideas", icon: Lightbulb },
   { id: "todos", icon: ListTodo },
   { id: "team", icon: Users },
