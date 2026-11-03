@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./client";
+import { kickCalendarSync } from "./calendar-sync";
 import { discardHomeLogin, readPending } from "./home-login";
 import { invitationFromHash } from "./navigation";
 import {
@@ -423,6 +424,7 @@ export function useWorkspace() {
           }
         : prev,
     );
+    if (kind === "event") kickCalendarSync(data.workspace.id);
     return updated;
   }
   async function readNotifications(id: string | null = null) {

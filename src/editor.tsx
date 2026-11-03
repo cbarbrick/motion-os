@@ -131,7 +131,13 @@ export function Editor({
         lastSaved.current = json;
         if (!mounted.current) return;
         remember(latest.current);
-        setState(preview ? "Saved in this browser" : "Saved to workspace");
+        setState(
+          preview
+            ? "Saved in this browser"
+            : kind === "event"
+              ? "Saved in Motion OS. Google sync status is on Calendar."
+              : "Saved to workspace",
+        );
       } while (JSON.stringify(latest.current) !== lastSaved.current);
       try {
         localStorage.removeItem(key);

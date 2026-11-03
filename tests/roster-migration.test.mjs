@@ -7,7 +7,7 @@ test('roster migration preserves athlete content, event links and decision histo
  const db=new PGlite();
  try {
   const owner='00000000-0000-4000-8000-000000000001';
-  await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;insert into auth.users values('${owner}','owner@example.test',now());`);
+  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;insert into auth.users values('${owner}','owner@example.test',now());`);
   const dir=new URL('../supabase/migrations/',import.meta.url);
   const names=(await readdir(dir)).filter(n=>n.endsWith('.sql')).sort();
   const target=names.find(n=>n.endsWith('_athlete_roster_and_affiliates.sql'));

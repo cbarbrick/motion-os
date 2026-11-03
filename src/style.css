@@ -2500,3 +2500,9 @@ body:has(dialog[open]) { overflow: hidden; }
   .google-calendar-actions .button { flex: 1 1 auto; justify-content: center; }
   .google-calendar-frame iframe { height: max(560px, calc(100dvh - 220px)); }
 }
+
+.calendar-sync-panel { padding: 20px; margin-bottom: 24px; }
+.calendar-sync-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.calendar-sync-heading p { color: var(--muted); font-size: 13px; max-width: 560px; margin: 8px 0; }
+.calendar-sync-errors { font-size: 13px; padding-left: 20px; }
+@media(max-width:650px) { .calendar-sync-heading { flex-direction: column; } .calendar-sync-panel { padding:16px; } }

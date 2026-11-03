@@ -30,6 +30,7 @@ import { Editor } from "./editor";
 import { GoogleCalendar } from "./google-calendar";
 import {
   eventStartDay,
+  eventOnDay,
   eventEndDay,
   eventTimeLabel,
 } from "./event-time";
@@ -516,31 +517,33 @@ export function App() {
               {view === "events" && (
                 <>
                   <GoogleCalendar
+                    key={data.workspace.id + String(store.preview)}
                     preview={store.preview}
-                    accountEmail={store.session?.user.email}
+                    workspace={data.workspace.id}
+                    owner={data.workspace.owner_id === store.userId}
+                    session={store.session}
+                    events={data.items.filter((i) => i.kind === "event")}
+                    onOpen={open}
                   />
-                  {data.items.some((item) => item.kind === "event") && (
-                    <details className="panel saved-motion-events">
-                      <summary>Previously saved Motion events</summary>
-                      <p>
-                        These events and their linked tasks are saved in Motion
-                        OS. They are separate from Google Calendar.
-                      </p>
-                      {data.items
-                        .filter((item) => item.kind === "event")
-                        .sort((a, b) =>
-                          (a.starts_at || "").localeCompare(b.starts_at || ""),
-                        )
-                        .map((event) => (
-                          <EventSummary
-                            key={event.id}
-                            event={event}
-                            data={data}
-                            onOpen={open}
-                          />
-                        ))}
-                    </details>
-                  )}
+                  <Events
+                    data={data}
+                    onOpen={open}
+                    onCreate={(day) =>
+                      create(
+                        "event",
+                        day
+                          ? {
+                              starts_at: new Date(
+                                day + "T09:00:00",
+                              ).toISOString(),
+                              ends_at: new Date(
+                                day + "T10:00:00",
+                              ).toISOString(),
+                            }
+                          : undefined,
+                      )
+                    }
+                  />
                 </>
               )}
               {view === "ideas" && (
@@ -1368,6 +1371,169 @@ function Board({
           )}
         </>
       )}
+    </>
+  );
+}
+function Events({
+  data,
+  onOpen,
+  onCreate,
+}: {
+  data: Snapshot;
+  onOpen: (i: Item) => void;
+  onCreate: (day?: string) => void;
+}) {
+  const [month, setMonth] = useState(
+      new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    ),
+    [selected, setSelected] = useState(""),
+    [athlete, setAthlete] = useState("all"),
+    [eventType, setEventType] = useState("all");
+  const first = new Date(month),
+    offset = (first.getDay() + 6) % 7;
+  first.setDate(first.getDate() - offset);
+  const days = Array.from({ length: 42 }, (_, i) =>
+    addDays(localDate(first), i),
+  );
+  const events = data.items
+    .filter(
+      (i) =>
+        i.kind === "event" &&
+        (athlete === "all" || i.athlete_id === athlete) &&
+        (eventType === "all" || i.event_type === eventType),
+    )
+    .sort((a, b) => (a.starts_at || "").localeCompare(b.starts_at || ""));
+  const shown = events.filter((e) =>
+    selected
+      ? eventOnDay(e, selected)
+      : eventStartDay(e) <
+          localDate(new Date(month.getFullYear(), month.getMonth() + 1, 1)) &&
+        eventEndDay(e) >= localDate(month),
+  );
+  return (
+    <>
+      <Heading eyebrow="" title="Calendar" description="">
+        {
+          <button
+            className="button primary"
+            onClick={() => onCreate(selected || undefined)}
+          >
+            <Plus size={17} />
+            New event
+          </button>
+        }
+      </Heading>
+      <div className="toolbar calendar-filters">
+        <label className="inline-label">
+          Athlete
+          <select value={athlete} onChange={(e) => setAthlete(e.target.value)}>
+            <option value="all">All athletes</option>
+            {data.sponsorships
+              .filter((s) => s.record_type === "athlete")
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.athlete_name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <div className="tabs">
+          {["all", "fight", "event"].map((t) => (
+            <button
+              key={t}
+              className={eventType === t ? "active" : ""}
+              onClick={() => setEventType(t)}
+            >
+              {t === "all" ? "All" : t === "fight" ? "Fights" : "Events"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="calendar-layout">
+        <section className="panel calendar">
+          <div className="calendar-heading">
+            <h2>
+              {month.toLocaleDateString("en-US", {
+                month: "long",
+                year: "numeric",
+              })}
+            </h2>
+            <div>
+              <button
+                aria-label="Previous month"
+                onClick={() => {
+                  setMonth(
+                    new Date(month.getFullYear(), month.getMonth() - 1, 1),
+                  );
+                  setSelected("");
+                }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <button
+                className="text-button"
+                onClick={() => {
+                  setMonth(
+                    new Date(
+                      new Date().getFullYear(),
+                      new Date().getMonth(),
+                      1,
+                    ),
+                  );
+                  setSelected("");
+                }}
+              >
+                Today
+              </button>
+              <button
+                aria-label="Next month"
+                onClick={() => {
+                  setMonth(
+                    new Date(month.getFullYear(), month.getMonth() + 1, 1),
+                  );
+                  setSelected("");
+                }}
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="calendar-weekdays">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+          <div className="calendar-grid">
+            {days.map((d) => (
+              <button
+                key={d}
+                onClick={() => setSelected(selected === d ? "" : d)}
+                className={`calendar-day ${d.slice(0, 7) !== localDate(month).slice(0, 7) ? "outside" : ""} ${d === localDate() ? "today" : ""} ${d === selected ? "selected" : ""}`}
+                aria-label={`${dateLabel(d)} · ${events.filter((e) => eventOnDay(e, d)).length} events`}
+              >
+                <span>{Number(d.slice(8))}</span>
+                {events
+                  .filter((e) => eventOnDay(e, d))
+                  .map((e) => (
+                    <small key={e.id} title={e.title}>
+                      {e.title}
+                    </small>
+                  ))}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="panel">
+          <PanelTitle
+            title={selected ? dateLabel(selected) : "This month"}
+            subtitle=""
+          />
+          {shown.map((e) => (
+            <EventSummary key={e.id} event={e} data={data} onOpen={onOpen} />
+          ))}
+          {!shown.length && <Empty title="No events" text="" />}
+        </section>
+      </div>
     </>
   );
 }
