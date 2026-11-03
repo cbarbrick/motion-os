@@ -18,7 +18,7 @@ Server credentials are configured for the production context and consumed only b
 
 Apply `20261103075717_google_calendar_sync.sql` before deploying. Public sync metadata has member-only RLS; worker RPCs are service-role-only. Only the workspace owner can start a connection, and the server verifies their current membership and matching Google identity. If a Google calendar creation request has an ambiguous network failure, a creation marker prevents duplicate calendars; inspect the owner’s Google account before clearing that marker.
 
-Validation: 53 tests cover existing access behavior plus queue authorization, workspace isolation, updates during sync, retries without duplicates, all-day dates and credential encryption. Production build passes. Live Google authorization and round-trip verification are pending.
+Validation: 53 tests cover existing access behavior plus queue authorization, workspace isolation, updates during sync, retries without duplicates, all-day dates and credential encryption. Production build passes. Production deploy `6ae9956b89e4910b1098cf39` is ready and published assets match the local build. The live sync endpoint rejects unauthenticated requests with HTTP 401. Hosted checks confirm member-only RLS and service-only worker RPCs; the security advisor reports no findings on the new calendar tables or functions. Browser checks cover the published connection state and sample event creation. Live Google authorization and round-trip verification are pending at the owner’s Google Allow screen.
 
 ## Simplified workspace update, October 27
 
