@@ -1360,7 +1360,9 @@ function Events({
     [selected, setSelected] = useState(""),
     [athlete, setAthlete] = useState("all"),
     [eventType, setEventType] = useState("all"),
-    [calendarView, setCalendarView] = useState("month"),
+    [calendarView, setCalendarView] = useState(
+      store.preview ? "month" : "google",
+    ),
     [feed, setFeed] = useState<CalendarFeed | null>(null);
   const first = new Date(month),
     offset = (first.getDay() + 6) % 7;
@@ -1388,209 +1390,41 @@ function Events({
     <>
       <Heading
         eyebrow=""
-        title={feed?.connection ? "Google Calendar" : "Calendar"}
+        title={store.preview ? "Sample calendar" : "Google Calendar"}
         description=""
       >
         {
           <button
             className="button primary"
-            onClick={() => onCreate(selected || undefined)}
+            onClick={() =>
+              onCreate(
+                calendarView === "google" ? undefined : selected || undefined,
+              )
+            }
           >
             <Plus size={17} />
             New event
           </button>
         }
       </Heading>
-      <div className="toolbar calendar-filters">
-        <div className="tabs" aria-label="Calendar view">
-          {["month", "schedule"].map((v) => (
-            <button
-              key={v}
-              aria-pressed={calendarView === v}
-              className={calendarView === v ? "active" : ""}
-              onClick={() => {
-                setCalendarView(v);
-                setSelected("");
-              }}
-            >
-              {v === "schedule" ? "Schedule" : "Month"}
-            </button>
-          ))}
-        </div>
-        <details className="calendar-filter-details">
-          <summary>
-            Filters{athlete !== "all" || eventType !== "all" ? " (active)" : ""}
-          </summary>
-          <div className="calendar-filter-options">
-            <label className="inline-label">
-              Athlete
-              <select
-                value={athlete}
-                onChange={(e) => setAthlete(e.target.value)}
-              >
-                <option value="all">All athletes</option>
-                {data.sponsorships
-                  .filter((s) => s.record_type === "athlete")
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.athlete_name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="tabs">
-              {["all", "fight", "event"].map((t) => (
-                <button
-                  key={t}
-                  className={eventType === t ? "active" : ""}
-                  onClick={() => setEventType(t)}
-                >
-                  {t === "all" ? "All" : t === "fight" ? "Fights" : "Events"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </details>
-      </div>
-      <div className={`calendar-layout calendar-view-${calendarView}`}>
-        <section className="panel calendar">
-          <div className="calendar-heading">
-            <h2>
-              {month.toLocaleDateString("en-US", {
-                month: "long",
-                year: "numeric",
-              })}
-            </h2>
-            <div>
-              <button
-                aria-label="Previous month"
-                onClick={() => {
-                  setMonth(
-                    new Date(month.getFullYear(), month.getMonth() - 1, 1),
-                  );
-                  setSelected("");
-                }}
-              >
-                <ChevronLeft size={18} />
-              </button>
-              <button
-                className="text-button"
-                onClick={() => {
-                  setMonth(
-                    new Date(
-                      new Date().getFullYear(),
-                      new Date().getMonth(),
-                      1,
-                    ),
-                  );
-                  setSelected("");
-                }}
-              >
-                Today
-              </button>
-              <button
-                aria-label="Next month"
-                onClick={() => {
-                  setMonth(
-                    new Date(month.getFullYear(), month.getMonth() + 1, 1),
-                  );
-                  setSelected("");
-                }}
-              >
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </div>
-          {calendarView === "month" && (
-            <>
-              <div className="calendar-weekdays">
-                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                  <span key={d}>{d}</span>
-                ))}
-              </div>
-              <div className="calendar-grid">
-                {days.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setSelected(selected === d ? "" : d)}
-                    className={`calendar-day ${d.slice(0, 7) !== localDate(month).slice(0, 7) ? "outside" : ""} ${d === localDate() ? "today" : ""} ${d === selected ? "selected" : ""}`}
-                    aria-label={`${dateLabel(d)} · ${events.filter((e) => eventOnDay(e, d)).length} events`}
-                  >
-                    <span>{Number(d.slice(8))}</span>
-                    {events
-                      .filter((e) => eventOnDay(e, d))
-                      .map((e) => (
-                        <small key={e.id} title={e.title}>
-                          {e.title}
-                        </small>
-                      ))}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-        <section className="panel calendar-agenda">
-          <PanelTitle
-            title={selected ? dateLabel(selected) : "This month"}
-            subtitle=""
-          />
-          {shown.map((e) => (
-            <article key={e.id} className="calendar-agenda-event">
-              <span
-                className={`calendar-event-source ${e.pending ? "pending" : ""}`}
-              >
-                {e.pending
-                  ? "Saving to Google…"
-                  : e.google
-                    ? "Google Calendar"
-                    : "Motion OS"}
-              </span>
-              {e.item ? (
-                <EventSummary event={e.item} data={data} onOpen={onOpen} />
-              ) : (
-                <details className="google-event-details">
-                  <summary>
-                    <span className="date-tile">
-                      <small>
-                        {dateLabel(eventStartDay(e), { month: "short" })}
-                      </small>
-                      <strong>
-                        {dateLabel(eventStartDay(e), { day: "numeric" })}
-                      </strong>
-                    </span>
-                    <span>
-                      <strong>{e.title}</strong>
-                      <small>
-                        {eventTimeLabel(e)}
-                        {e.location ? ` · ${e.location}` : ""}
-                      </small>
-                    </span>
-                  </summary>
-                  <p>{e.description || "No description"}</p>
-                </details>
-              )}
-            </article>
-          ))}
-          {!shown.length && (
-            <Empty
-              title={
-                currentFeed?.connection
-                  ? "No Google Calendar events this month"
-                  : "No events"
-              }
-              text="Use New event to add something to the calendar."
-            />
-          )}
+      {!store.preview && (
+        <div className="tabs google-view-tabs" aria-label="Calendar display">
           <button
-            className="button calendar-add-bottom"
-            onClick={() => onCreate(selected || undefined)}
+            className={calendarView === "google" ? "active" : ""}
+            aria-pressed={calendarView === "google"}
+            onClick={() => setCalendarView("google")}
           >
-            <Plus size={17} />
-            New event
+            Google calendar
           </button>
-        </section>
-      </div>
+          <button
+            className={calendarView !== "google" ? "active" : ""}
+            aria-pressed={calendarView !== "google"}
+            onClick={() => setCalendarView("schedule")}
+          >
+            Event list & editing
+          </button>
+        </div>
+      )}
       <GoogleCalendar
         preview={store.preview}
         workspace={data.workspace.id}
@@ -1601,7 +1435,210 @@ function Events({
         end={end}
         onFeed={setFeed}
         onOpen={onOpen}
+        showEmbed={calendarView === "google"}
+        onShowEvents={() => setCalendarView("schedule")}
       />
+      {calendarView !== "google" && (
+        <>
+          <div className="toolbar calendar-filters">
+            <div className="tabs" aria-label="Calendar view">
+              {["month", "schedule"].map((v) => (
+                <button
+                  key={v}
+                  aria-pressed={calendarView === v}
+                  className={calendarView === v ? "active" : ""}
+                  onClick={() => {
+                    setCalendarView(v);
+                    setSelected("");
+                  }}
+                >
+                  {v === "schedule" ? "Schedule" : "Month"}
+                </button>
+              ))}
+            </div>
+            <details className="calendar-filter-details">
+              <summary>
+                Filters
+                {athlete !== "all" || eventType !== "all" ? " (active)" : ""}
+              </summary>
+              <div className="calendar-filter-options">
+                <label className="inline-label">
+                  Athlete
+                  <select
+                    value={athlete}
+                    onChange={(e) => setAthlete(e.target.value)}
+                  >
+                    <option value="all">All athletes</option>
+                    {data.sponsorships
+                      .filter((s) => s.record_type === "athlete")
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.athlete_name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <div className="tabs">
+                  {["all", "fight", "event"].map((t) => (
+                    <button
+                      key={t}
+                      className={eventType === t ? "active" : ""}
+                      onClick={() => setEventType(t)}
+                    >
+                      {t === "all"
+                        ? "All"
+                        : t === "fight"
+                          ? "Fights"
+                          : "Events"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </details>
+          </div>
+          <div className={`calendar-layout calendar-view-${calendarView}`}>
+            <section className="panel calendar">
+              <div className="calendar-heading">
+                <h2>
+                  {month.toLocaleDateString("en-US", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </h2>
+                <div>
+                  <button
+                    aria-label="Previous month"
+                    onClick={() => {
+                      setMonth(
+                        new Date(month.getFullYear(), month.getMonth() - 1, 1),
+                      );
+                      setSelected("");
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      setMonth(
+                        new Date(
+                          new Date().getFullYear(),
+                          new Date().getMonth(),
+                          1,
+                        ),
+                      );
+                      setSelected("");
+                    }}
+                  >
+                    Today
+                  </button>
+                  <button
+                    aria-label="Next month"
+                    onClick={() => {
+                      setMonth(
+                        new Date(month.getFullYear(), month.getMonth() + 1, 1),
+                      );
+                      setSelected("");
+                    }}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+              {calendarView === "month" && (
+                <>
+                  <div className="calendar-weekdays">
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
+                      (d) => (
+                        <span key={d}>{d}</span>
+                      ),
+                    )}
+                  </div>
+                  <div className="calendar-grid">
+                    {days.map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setSelected(selected === d ? "" : d)}
+                        className={`calendar-day ${d.slice(0, 7) !== localDate(month).slice(0, 7) ? "outside" : ""} ${d === localDate() ? "today" : ""} ${d === selected ? "selected" : ""}`}
+                        aria-label={`${dateLabel(d)} · ${events.filter((e) => eventOnDay(e, d)).length} events`}
+                      >
+                        <span>{Number(d.slice(8))}</span>
+                        {events
+                          .filter((e) => eventOnDay(e, d))
+                          .map((e) => (
+                            <small key={e.id} title={e.title}>
+                              {e.title}
+                            </small>
+                          ))}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+            <section className="panel calendar-agenda">
+              <PanelTitle
+                title={selected ? dateLabel(selected) : "This month"}
+                subtitle=""
+              />
+              {shown.map((e) => (
+                <article key={e.id} className="calendar-agenda-event">
+                  <span
+                    className={`calendar-event-source ${e.pending ? "pending" : ""}`}
+                  >
+                    {e.pending
+                      ? "Saving to Google…"
+                      : e.google
+                        ? "Google Calendar"
+                        : "Motion OS"}
+                  </span>
+                  {e.item ? (
+                    <EventSummary event={e.item} data={data} onOpen={onOpen} />
+                  ) : (
+                    <details className="google-event-details">
+                      <summary>
+                        <span className="date-tile">
+                          <small>
+                            {dateLabel(eventStartDay(e), { month: "short" })}
+                          </small>
+                          <strong>
+                            {dateLabel(eventStartDay(e), { day: "numeric" })}
+                          </strong>
+                        </span>
+                        <span>
+                          <strong>{e.title}</strong>
+                          <small>
+                            {eventTimeLabel(e)}
+                            {e.location ? ` · ${e.location}` : ""}
+                          </small>
+                        </span>
+                      </summary>
+                      <p>{e.description || "No description"}</p>
+                    </details>
+                  )}
+                </article>
+              ))}
+              {!shown.length && (
+                <Empty
+                  title={
+                    currentFeed?.connection
+                      ? "No Google Calendar events this month"
+                      : "No events"
+                  }
+                  text="Use New event to add something to the calendar."
+                />
+              )}
+              <button
+                className="button calendar-add-bottom"
+                onClick={() => onCreate(selected || undefined)}
+              >
+                <Plus size={17} />
+                New event
+              </button>
+            </section>
+          </div>
+        </>
+      )}
     </>
   );
 }

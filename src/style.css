@@ -2486,6 +2486,12 @@ body:has(dialog[open]) { overflow: hidden; }
 }
 
 .google-calendar { min-width: 0; }
+.google-view-tabs { margin-bottom: 12px; }
+.google-calendar-intro { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0 0 12px; }
+.google-embed-actions { margin-top: 12px; }
+.google-embed-help { font-size: 13px; line-height: 1.6; margin: 16px 0 24px; color: var(--muted); }
+.google-embed-help summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; }
+.google-embed-help p { max-width: 720px; }
 .google-calendar-heading { align-items: center; flex-wrap: wrap; gap: 18px; margin-bottom: 12px; }
 .google-calendar-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .google-calendar-actions .button { min-height: 44px; text-decoration: none; }
