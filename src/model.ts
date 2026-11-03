@@ -114,7 +114,13 @@ export function isOnTask(item: Item, userId: string): boolean {
 export type ReviewStatus = "pending" | "approved" | "denied";
 export type SponsorshipStatus = ReviewStatus | "active";
 export interface SponsorshipInput {
-  record_type: "athlete" | "affiliate" | "person";
+  record_type:
+    | "athlete"
+    | "affiliate"
+    | "person"
+    | "athlete_proposal"
+    | "project"
+    | "other";
   rate: string;
   athlete_name: string;
   sport: string;
@@ -153,8 +159,18 @@ export const sponsorshipLabels: Record<SponsorshipStatus, string> = {
   approved: "Approved",
   denied: "Denied",
 };
+export const approvalTypes = {
+  athlete_proposal: "Athlete",
+  project: "Project",
+  person: "Person",
+  affiliate: "Affiliate",
+  other: "Other",
+} as const;
+export function approvalTypeLabel(type: SponsorshipInput["record_type"]) {
+  return type === "athlete" ? "Athlete" : approvalTypes[type];
+}
 export function blankSponsorship(
-  record_type: "athlete" | "affiliate" | "person" = "athlete",
+  record_type: SponsorshipInput["record_type"] = "athlete",
 ): SponsorshipInput {
   return {
     record_type,
@@ -205,7 +221,7 @@ export const labels: Record<View, string> = {
   week: "My week",
   team_week: "Team week",
   sponsorships: "Athletes",
-  affiliates: "Affiliates",
+  affiliates: "David's approval",
   people: "People",
   tasks: "Tasks",
   events: "Calendar",

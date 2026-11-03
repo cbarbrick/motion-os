@@ -6,6 +6,14 @@ Motion’s shared workspace for people, weekly deliverables, athletes, affiliate
 
 This repository contains the `motion-team-os` application. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the branch/pull-request workflow. New contributors can run the app in sample mode without production credentials. GitHub access and live app membership are managed separately.
 
+## David's approval, November 3, 2026
+
+The former Affiliates page is now **David's approval**, at the existing `#affiliates` route so saved links keep working. Any workspace member can submit an **Athlete**, **Project**, **Person**, **Affiliate**, or **Other** request with a name/title, description, proposed budget/rate, supporting link, scope and timing. The queue includes existing affiliate and people proposals, with type filters and Pending review / All requests views. People submissions also appear under People. Athlete proposals remain requests and are not automatically added to the active athlete roster after approval.
+
+The existing owner-selected reviewer alone can approve, deny or reopen requests. Comments and decision history are attributed; changing reviewed details requires a new decision. David has not joined the live workspace as of this update, so reviewer selection remains unset. Requests can be submitted before he joins; select him under **David's approval → Reviewer** afterward.
+
+Migration `20261103183759_davids_approval_queue.sql` expands the allowed request types without modifying existing records, RLS, RPC authorization or calendar links. All 54 tests and the production build pass. New database coverage verifies all five request types, reviewer-only decisions, workspace isolation, preserved existing records, stale-edit rejection and re-review after changes. Hosted create/approve/edit checks passed for every category inside a rolled-back transaction. Browser sample checks cover project/athlete submission, filters, approval, undo, changed-budget re-review, reload persistence, and the 390px mobile form and queue. No real proposals or decisions were created during verification.
+
 ## Shared Motion OS Google Calendar, November 3, 2026
 
 The Calendar page is a shared, editable Motion OS calendar. Every active workspace member can create and edit events through the existing authorized save RPC. The owner connects Google once to create a dedicated **Motion OS** secondary calendar. The previous Executive Assistant embed is removed; its events and sharing are not changed.
@@ -92,9 +100,9 @@ npx netlify-cli deploy --site 076a97b9-2021-4a62-b1a5-3d39f1e05a4b --dir dist --
 4. Link tasks to events. The Content board shows the same task records, filtered by Content category. Event detail shows linked preparation and content deliverables.
 5. Check off finished work directly. Notes and HTTPS deliverable links are optional. Uncheck to reopen. States are Open, In progress and Done.
 6. Ideas use Inbox, Planned and Archived. Personal to-dos are private to their creator, including from workspace owners through the app.
-7. **Athletes** is the current roster. New athletes are active immediately, with no approval controls. Profiles, comments, deliverables and linked calendar events remain editable. **Affiliates** stores proposed partners, category, rate/commission, description, deliverables and dates. Any member can submit, edit and comment. The owner selects a reviewer from joined members. Only that reviewer can approve, deny or reopen affiliate and potential-hire proposals. Decisions and comments retain their authenticated author and date. Editing reviewed terms returns the proposal to Pending review and preserves prior decisions in history.
+7. **Athletes** is the current roster. New roster athletes are active immediately, with no approval controls. Profiles, comments, deliverables and linked calendar events remain editable. **David's approval** holds athlete, project, person, affiliate and other requests. Any member can submit, edit and comment. The owner selects David's joined account as reviewer. Only the selected reviewer can approve, deny or reopen requests. Decisions and comments retain their authenticated author and date. Editing reviewed terms returns the request to Pending review and preserves prior decisions in history.
 
-**David setup:** his email is not yet known and he has not joined. No live reviewer is selected. After David joins through the workspace invite, choose him under **Affiliates → Reviewer**. Proposals and comments can be saved before then.
+**David setup:** his email is not yet known and he has not joined. No live reviewer is selected. After David joins through the workspace invite, choose him under **David's approval → Reviewer**. Requests and comments can be saved before then.
 
 Existing records autosave after 800 ms or when the editor closes. New records stay as device drafts until Create is clicked. The interface displays draft/saving/saved/error states. Optimistic versions reject stale edits; conflict drafts can be downloaded before reloading. Workspace data refreshes on focus and every 20 seconds. This is not simultaneous document editing or offline synchronization.
 

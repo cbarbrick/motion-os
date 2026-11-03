@@ -5,7 +5,7 @@ import {
   CalendarDays,
   Check,
   Trophy,
-  Handshake,
+  ClipboardCheck,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -59,7 +59,7 @@ const nav = [
   { id: "tasks", icon: ClipboardList },
   { id: "events", icon: CalendarDays },
   { id: "sponsorships", icon: Trophy },
-  { id: "affiliates", icon: Handshake },
+  { id: "affiliates", icon: ClipboardCheck },
   { id: "people", icon: UserRound },
   { id: "ideas", icon: Lightbulb },
   { id: "todos", icon: ListTodo },
@@ -455,7 +455,7 @@ export function App() {
                     view === "people"
                       ? "person"
                       : view === "affiliates"
-                        ? "affiliate"
+                        ? "approval"
                         : "athlete"
                   }
                   onCreateEvent={(athlete) =>

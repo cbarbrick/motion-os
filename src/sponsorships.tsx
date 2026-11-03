@@ -7,6 +7,7 @@ import {
   Search,
   Trophy,
   Handshake,
+  ClipboardCheck,
   X,
   CalendarDays,
   UserRound,
@@ -17,6 +18,8 @@ import {
   blankSponsorship,
   sponsorshipInputOf,
   sponsorshipLabels,
+  approvalTypes,
+  approvalTypeLabel,
   dateLabel,
   localDate,
   initials,
@@ -32,10 +35,10 @@ type Store = ReturnType<typeof useWorkspace>;
 type RecordType = SponsorshipInput["record_type"];
 const profileLabels = {
   athlete: { singular: "Athlete", plural: "Athletes", add: "Add athlete" },
-  affiliate: {
-    singular: "Affiliate",
-    plural: "Affiliates",
-    add: "Add affiliate",
+  approval: {
+    singular: "Request",
+    plural: "David's approval",
+    add: "Submit for approval",
   },
   person: { singular: "Person", plural: "People", add: "Add person" },
 };
@@ -47,13 +50,14 @@ export function Sponsorships({
   onOpenEvent,
 }: {
   store: Store;
-  type?: RecordType;
+  type?: "athlete" | "person" | "approval";
   onCreateEvent: (athlete: string) => void;
   onOpenEvent: (event: Item) => void;
 }) {
   const data = store.data!;
   const [selected, setSelected] = useState<string | null>(null),
     [filter, setFilter] = useState("all"),
+    [category, setCategory] = useState("all"),
     [query, setQuery] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
@@ -62,7 +66,13 @@ export function Sponsorships({
   const reviewer = data.members.find(
     (m) => m.user_id === data.sponsorshipReviewer,
   );
-  const records = data.sponsorships.filter((s) => s.record_type === type);
+  const approval = type === "approval";
+  const records = data.sponsorships.filter((s) =>
+    approval
+      ? s.record_type !== "athlete" &&
+        (category === "all" || s.record_type === category)
+      : s.record_type === type,
+  );
   const rows = records
     .filter(
       (s) =>
@@ -75,6 +85,8 @@ export function Sponsorships({
   const person = type === "person";
   const athlete = type === "athlete";
   const copy = profileLabels[type];
+  const selectedRecord =
+    data.sponsorships.find((s) => s.id === selected) || null;
   async function chooseReviewer(id: string) {
     setBusy(true);
     setMessage("");
@@ -89,8 +101,16 @@ export function Sponsorships({
   }
   return (
     <>
-      <div className="heading">
-        <h1>{copy.plural}</h1>
+      <div className={`heading${approval ? " approval-heading" : ""}`}>
+        <div>
+          <h1>{copy.plural}</h1>
+          {approval && (
+            <p>
+              Submit athletes, projects, people, affiliates, or anything else
+              for David to approve.
+            </p>
+          )}
+        </div>
         <button className="button primary" onClick={() => setSelected("new")}>
           <Plus size={18} />
           {copy.add}
@@ -102,8 +122,8 @@ export function Sponsorships({
             <h2>Reviewer{reviewer ? `: ${reviewer.name}` : " not selected"}</h2>
             <p>
               {reviewer
-                ? "Approves affiliates and people."
-                : "Select David after he joins."}
+                ? "Reviews all requests in David's approval."
+                : "Requests can be submitted now. Select David as reviewer after he joins the workspace."}
             </p>
           </div>
           {owner && (
@@ -138,7 +158,7 @@ export function Sponsorships({
               className={mode === "review" ? "active" : ""}
               onClick={() => setMode("review")}
             >
-              Review cards{" "}
+              Pending review{" "}
               <span>
                 {records.filter((s) => s.status === "pending").length}
               </span>
@@ -147,9 +167,25 @@ export function Sponsorships({
               className={mode === "list" ? "active" : ""}
               onClick={() => setMode("list")}
             >
-              All {copy.plural.toLowerCase()}
+              {approval ? "All requests" : `All ${copy.plural.toLowerCase()}`}
             </button>
           </div>
+          {approval && (
+            <label className="approval-type-filter">
+              Submission type
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="all">All types</option>
+                {Object.entries(approvalTypes).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
       {!athlete && mode === "review" ? (
@@ -187,7 +223,11 @@ export function Sponsorships({
             <label className="athlete-search">
               <Search size={18} />
               <input
-                aria-label={`Search ${copy.plural.toLowerCase()}`}
+                aria-label={
+                  approval
+                    ? "Search requests"
+                    : `Search ${copy.plural.toLowerCase()}`
+                }
                 placeholder="Search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -209,6 +249,8 @@ export function Sponsorships({
                           <Trophy size={24} />
                         ) : person ? (
                           <UserRound size={24} />
+                        ) : approval ? (
+                          <ClipboardCheck size={24} />
                         ) : (
                           <Handshake size={24} />
                         )}
@@ -221,16 +263,18 @@ export function Sponsorships({
                     </div>
                     <h2>{s.athlete_name}</h2>
                     <span className="category">
-                      {s.sport ||
-                        (athlete
-                          ? "Sport not added"
-                          : person
-                            ? "Role not added"
-                            : "Category not added")}
+                      {approval
+                        ? approvalTypeLabel(s.record_type)
+                        : s.sport ||
+                          (athlete
+                            ? "Sport not added"
+                            : person
+                              ? "Role not added"
+                              : "Category not added")}
                     </span>
                     {!athlete && (
                       <strong className="profile-rate">
-                        {s.rate || "Rate not added"}
+                        {s.rate || "Cost / rate not added"}
                       </strong>
                     )}
                     {s.proposal && <p>{s.proposal}</p>}
@@ -241,7 +285,8 @@ export function Sponsorships({
                       </dl>
                     )}
                     <span className="text-button">
-                      View profile <ArrowRight size={16} />
+                      {approval ? "View request" : "View profile"}{" "}
+                      <ArrowRight size={16} />
                     </span>
                   </button>
                   {athlete && (
@@ -295,7 +340,9 @@ export function Sponsorships({
               <h2>
                 {records.length
                   ? "No matches"
-                  : `No ${copy.plural.toLowerCase()} added`}
+                  : approval
+                    ? "No requests yet"
+                    : `No ${copy.plural.toLowerCase()} added`}
               </h2>
               <button
                 className="button primary"
@@ -308,15 +355,12 @@ export function Sponsorships({
           )}
         </>
       )}
-      {selected && (
+      {selected && (selected === "new" || selectedRecord) && (
         <SponsorshipDetails
           key={selected}
-          type={type}
-          proposal={
-            selected === "new"
-              ? null
-              : data.sponsorships.find((s) => s.id === selected) || null
-          }
+          type={selectedRecord?.record_type || (approval ? "other" : type)}
+          approval={approval}
+          proposal={selectedRecord}
           store={store}
           onClose={() => setSelected(null)}
           onCreated={(s) => setSelected(s.id)}
@@ -430,10 +474,7 @@ function ReviewCards({
                 {initials(current.athlete_name)}
               </span>
               <span className="review-type">
-                {current.sport ||
-                  (current.record_type === "affiliate"
-                    ? "Category not added"
-                    : "Role not added")}
+                {approvalTypeLabel(current.record_type)}
               </span>
             </div>
             <div className="review-card-body">
@@ -444,7 +485,10 @@ function ReviewCards({
                   (m) => m.user_id === current.created_by,
                 )?.name || "Previous member"}
               </p>
-              <p className="review-rate">{current.rate || "Rate not added"}</p>
+              {current.sport && <p className="muted">{current.sport}</p>}
+              <p className="review-rate">
+                {current.rate || "Cost / rate not added"}
+              </p>
               <p className="review-description">
                 {current.proposal || "No description"}
               </p>
@@ -456,12 +500,12 @@ function ReviewCards({
               )}
               {current.timing && (
                 <p>
-                  <span className="field-caption">Availability</span>
+                  <span className="field-caption">Timing</span>
                   {current.timing}
                 </p>
               )}
               <button className="text-button" onClick={() => onOpen(current)}>
-                Profile & comments <ArrowRight size={17} />
+                Details & comments <ArrowRight size={17} />
               </button>
             </div>
           </article>
@@ -511,12 +555,12 @@ function ReviewCards({
           <Check size={36} />
           <h2>
             {pending.length
-              ? "All remaining profiles skipped"
-              : "No pending profiles"}
+              ? "All remaining requests skipped"
+              : "No pending requests"}
           </h2>
           {pending.length > 0 ? (
             <button className="button" onClick={() => setSkipped([])}>
-              Review skipped profiles
+              Review skipped requests
             </button>
           ) : (
             <button className="button primary" onClick={onAdd}>
@@ -536,10 +580,12 @@ function SponsorshipDetails({
   onClose,
   onCreated,
   type,
+  approval,
   onCreateEvent,
   onOpenEvent,
 }: {
   type: RecordType;
+  approval: boolean;
   onCreateEvent: (athlete: string) => void;
   onOpenEvent: (event: Item) => void;
   proposal: Sponsorship | null;
@@ -547,9 +593,9 @@ function SponsorshipDetails({
   onClose: () => void;
   onCreated: (s: Sponsorship) => void;
 }) {
-  const person = type === "person";
   const athlete = type === "athlete";
-  const copy = profileLabels[type];
+  const copy =
+    profileLabels[athlete ? "athlete" : approval ? "approval" : "person"];
   const key = `motion-sponsor-draft:${store.preview ? "sample" : "live"}:${store.userId}:${store.data!.workspace.id}:${proposal?.id || `new-${type}`}`;
   const draftBase = useRef<number | null>(null);
   const [form, setForm] = useState<SponsorshipInput>(() => {
@@ -578,6 +624,10 @@ function SponsorshipDetails({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [draftWarning, setDraftWarning] = useState("");
+  const person = form.record_type === "person";
+  const proposedAthlete = form.record_type === "athlete_proposal";
+  const general =
+    form.record_type === "project" || form.record_type === "other";
   const dialog = useRef<HTMLDialogElement>(null),
     current = useRef(
       proposal
@@ -643,7 +693,7 @@ function SponsorshipDetails({
   async function flush(): Promise<Sponsorship | null> {
     if (running.current) return null;
     if (!valid(latest.current)) {
-      setError("Add a name. Profile links must start with https://.");
+      setError("Add a name or title. Links must start with https://.");
       return null;
     }
     running.current = true;
@@ -782,7 +832,7 @@ function SponsorshipDetails({
         </div>
         <button
           className="icon-button"
-          aria-label="Close profile"
+          aria-label={approval ? "Close request" : "Close profile"}
           disabled={busy}
           onClick={close}
         >
@@ -809,36 +859,82 @@ function SponsorshipDetails({
           <p className="notice">Editing details requires a new review.</p>
         )}
         <fieldset disabled={busy}>
+          {approval && !record && (
+            <label>
+              Submission type
+              <select
+                value={form.record_type}
+                onChange={(e) => change("record_type", e.target.value)}
+              >
+                {Object.entries(approvalTypes).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {approval && record && (
+            <p className="field-caption">
+              {approvalTypeLabel(record.record_type)} request
+            </p>
+          )}
           <div className="form-grid">
             <label>
-              {athlete ? "Athlete name" : "Name"}
+              {athlete || proposedAthlete
+                ? "Athlete name"
+                : general
+                  ? "Title"
+                  : "Name"}
               <input
                 value={form.athlete_name}
                 maxLength={180}
                 onChange={(e) => change("athlete_name", e.target.value)}
-                placeholder="Full name"
+                placeholder={
+                  general ? "What needs David's approval?" : "Full name"
+                }
                 autoFocus
               />
             </label>
             <label>
-              {athlete ? "Sport" : person ? "Role" : "Category"}
+              {athlete || proposedAthlete
+                ? "Sport"
+                : person
+                  ? "Role"
+                  : "Category"}
               <input
                 value={form.sport}
                 maxLength={100}
                 onChange={(e) => change("sport", e.target.value)}
                 placeholder={
-                  athlete ? "MMA" : person ? "Videographer" : "Fitness creator"
+                  athlete || proposedAthlete
+                    ? "MMA"
+                    : person
+                      ? "Videographer"
+                      : general
+                        ? "Optional"
+                        : "Fitness creator"
                 }
               />
             </label>
           </div>
           {!athlete && (
             <label>
-              {person ? "Rate" : "Rate / commission"}
+              {general || proposedAthlete
+                ? "Proposed cost / budget"
+                : person
+                  ? "Rate"
+                  : "Rate / commission"}
               <input
                 value={form.rate}
                 maxLength={300}
-                placeholder={person ? "$750 / day" : "10% commission"}
+                placeholder={
+                  general || proposedAthlete
+                    ? "Amount or support requested (optional)"
+                    : person
+                      ? "$750 / day"
+                      : "10% commission"
+                }
                 onChange={(e) => change("rate", e.target.value)}
               />
             </label>
@@ -850,14 +946,18 @@ function SponsorshipDetails({
               value={form.proposal}
               maxLength={10000}
               onChange={(e) => change("proposal", e.target.value)}
-              placeholder="Background and proposed work"
+              placeholder={
+                approval
+                  ? "What are you proposing, and what does David need to decide?"
+                  : "Background and proposed work"
+              }
             />
           </label>
           <details className="more-details">
             <summary>More details</summary>
             <div className="details-body">
               <label>
-                Profile link
+                {approval ? "Supporting link" : "Profile link"}
                 <input
                   type="url"
                   value={form.profile_url}
@@ -873,7 +973,7 @@ function SponsorshipDetails({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Open profile <ExternalLink size={14} />
+                  Open link <ExternalLink size={14} />
                 </a>
               )}
               <label>
@@ -886,18 +986,28 @@ function SponsorshipDetails({
                 />
               </label>
               <label>
-                {person ? "Experience" : "Audience"}
+                {general ? "Background" : person ? "Experience" : "Audience"}
                 <textarea
                   rows={2}
                   value={form.audience}
                   maxLength={1000}
                   onChange={(e) => change("audience", e.target.value)}
-                  placeholder={person ? "Previous work" : "Audience details"}
+                  placeholder={
+                    general
+                      ? "Relevant context"
+                      : person
+                        ? "Previous work"
+                        : "Audience details"
+                  }
                 />
               </label>
 
               <label>
-                {person ? "Additional costs" : "Budget"}
+                {approval
+                  ? "Budget / support details"
+                  : person
+                    ? "Additional costs"
+                    : "Budget"}
                 <textarea
                   rows={2}
                   value={form.requested_support}
@@ -907,17 +1017,25 @@ function SponsorshipDetails({
                 />
               </label>
               <label>
-                {person ? "Scope of work" : "Deliverables"}
+                {general || person ? "Scope of work" : "Deliverables"}
                 <textarea
                   rows={3}
                   value={form.deliverables}
                   maxLength={4000}
                   onChange={(e) => change("deliverables", e.target.value)}
-                  placeholder="Posts, videos, appearances, usage rights and quantities"
+                  placeholder={
+                    general
+                      ? "What will be delivered or completed?"
+                      : "Posts, videos, appearances, usage rights and quantities"
+                  }
                 />
               </label>
               <label>
-                {person ? "Availability" : "Partnership dates"}
+                {general
+                  ? "Timeline / deadline"
+                  : person
+                    ? "Availability"
+                    : "Partnership dates"}
                 <input
                   value={form.timing}
                   maxLength={1000}
