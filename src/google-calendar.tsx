@@ -4,11 +4,15 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 // This is Google's normal calendar ID, not an iCal secret or an access token.
 // Google enforces the calendar's existing sharing permissions inside the frame.
 const calendarId = "emilee.e@cbdplususa.com";
-const calendarUrl =
-  "https://calendar.google.com/calendar/r?cid=ZW1pbGVlLmVAY2JkcGx1c3VzYS5jb20";
 const compactQuery = "(max-width: 650px)";
 
-export function GoogleCalendar({ preview }: { preview: boolean }) {
+export function GoogleCalendar({
+  preview,
+  accountEmail,
+}: {
+  preview: boolean;
+  accountEmail?: string;
+}) {
   const [compact, setCompact] = useState(
     () => window.matchMedia(compactQuery).matches,
   );
@@ -29,6 +33,16 @@ export function GoogleCalendar({ preview }: { preview: boolean }) {
     showPrint: "0",
     showCalendars: "0",
   });
+  const linkParams = new URLSearchParams({
+    cid: "ZW1pbGVlLmVAY2JkcGx1c3VzYS5jb20",
+  });
+  // Account positions such as /u/5 vary between browsers. Select the person's
+  // signed-in Motion account rather than Google's unrelated default account.
+  if (accountEmail) {
+    params.set("authuser", accountEmail);
+    linkParams.set("authuser", accountEmail);
+  }
+  const calendarUrl = `https://calendar.google.com/calendar/r?${linkParams}`;
 
   return (
     <section className="google-calendar" aria-labelledby="google-calendar-title">

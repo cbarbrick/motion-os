@@ -515,7 +515,10 @@ export function App() {
               )}
               {view === "events" && (
                 <>
-                  <GoogleCalendar preview={store.preview} />
+                  <GoogleCalendar
+                    preview={store.preview}
+                    accountEmail={store.session?.user.email}
+                  />
                   {data.items.some((item) => item.kind === "event") && (
                     <details className="panel saved-motion-events">
                       <summary>Previously saved Motion events</summary>

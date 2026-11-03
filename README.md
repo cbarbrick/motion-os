@@ -10,6 +10,8 @@ This repository contains the `motion-team-os` application. See [CONTRIBUTING.md]
 
 The Calendar page now embeds the **Executive Assistant** Google Calendar selected by the workspace owner. It uses Google's official embed, the calendar's Eastern time zone, a week view on larger screens and a schedule view on phones. The Google Calendar controls let viewers change dates and views. **Refresh** reloads the embedded calendar; **Open Google Calendar** opens it separately for sign-in and, when permitted, editing.
 
+For signed-in members, both links select their Motion login email as the Google account hint. This avoids silently using an unrelated default Google account when multiple accounts are signed in; browser-specific account numbers such as `/u/5` are never hardcoded.
+
 Google's existing sharing permissions still apply. A Motion OS login or access to this public GitHub repository does not grant calendar access. Viewers must also be signed into a Google account the calendar is shared with. Browsers that block embedded Google sign-in may require opening Google Calendar separately. The calendar has not been made public, and no event data, Google access tokens or private iCal feed URLs are stored in the repository or copied into Supabase. The embedded calendar remains live in sample mode and is labeled accordingly.
 
 The old Motion calendar grid has been replaced. Existing Motion event records, linked tasks and athlete links are preserved and accessible under **Previously saved Motion events** or through the corresponding athlete/task. These records do not synchronize with Google Calendar. The existing account persistence, tasks, people, athletes, affiliates, ideas and private to-dos remain in place.
