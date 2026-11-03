@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  clearBrowserPush,
+  disableDevicePush,
+  dispatchPush,
+} from "./push-client";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./client";
 import { kickCalendarSync } from "./calendar-sync";
@@ -193,6 +198,7 @@ export function useWorkspace() {
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (stopped) return;
       revision++;
+      if (event === "SIGNED_OUT") void clearBrowserPush().catch(() => {});
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
       setSession(next);
       setAuthReady(true);
@@ -420,6 +426,7 @@ export function useWorkspace() {
         : prev,
     );
     if (kind === "event") kickCalendarSync(data.workspace.id);
+    if (kind === "event" || kind === "task") dispatchPush(data.workspace.id);
     return updated;
   }
   async function readNotifications(id: string | null = null) {
@@ -652,6 +659,7 @@ export function useWorkspace() {
     }
     const pending = readPending();
     if (pending) void discardHomeLogin(pending);
+    await disableDevicePush().catch(() => {});
     const result = await supabase!.auth.signOut({ scope: "local" });
     if (result.error) {
       setError(result.error.message);

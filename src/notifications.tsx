@@ -7,6 +7,7 @@ import {
   type TaskNotification,
 } from "./model";
 import type { useWorkspace } from "./use-workspace";
+import { PushSettings } from "./push-settings";
 
 export function Notifications({
   store,
@@ -30,6 +31,14 @@ export function Notifications({
     );
   const unread = notices.filter((n) => !n.read_at).length;
   const visible = unreadOnly ? notices.filter((n) => !n.read_at) : notices;
+  useEffect(() => {
+    const openInbox = () => {
+      if (location.hash === "#notifications") setOpened(true);
+    };
+    openInbox();
+    window.addEventListener("hashchange", openInbox);
+    return () => window.removeEventListener("hashchange", openInbox);
+  }, []);
   useEffect(() => {
     const next = notices.find(
       (n) => !n.read_at && seen.current && !seen.current.has(n.id),
@@ -124,6 +133,9 @@ export function Notifications({
             <X size={20} />
           </button>
         </div>
+        {opened && (
+          <PushSettings preview={store.preview} userId={store.userId} />
+        )}
         <div className="notification-toolbar">
           <div className="tabs">
             <button
