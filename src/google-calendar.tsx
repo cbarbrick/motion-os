@@ -196,7 +196,7 @@ export function GoogleCalendar({
           {!preview && connection && owner && (
             <a
               className="button"
-              href={`https://calendar.google.com/calendar/r?${new URLSearchParams({ cid: btoa(connection.calendar_id), authuser: session?.user.email || "" })}`}
+              href={`https://calendar.google.com/calendar/r?${new URLSearchParams({ authuser: session?.user.email || "" })}`}
               target="_blank"
               rel="noopener noreferrer"
             >
