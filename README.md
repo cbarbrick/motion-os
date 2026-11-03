@@ -16,7 +16,7 @@ Google's existing sharing permissions still apply. A Motion OS login or access t
 
 The old Motion calendar grid has been replaced. Existing Motion event records, linked tasks and athlete links are preserved and accessible under **Previously saved Motion events** or through the corresponding athlete/task. These records do not synchronize with Google Calendar. The existing account persistence, tasks, people, athletes, affiliates, ideas and private to-dos remain in place.
 
-Verification: all 45 existing tests and the production build pass. Browser checks show actual shared Google events inside the app, working week navigation and refresh, a schedule layout at 390px and 320px with no page overflow, preserved Motion event access, and working Tasks navigation. Google calendar sharing was not changed. Actual iPhone home-screen Google-session behavior still requires device acceptance.
+Verification: all 45 existing tests and the production build pass. Local browser checks show actual shared Google events inside the app, working week navigation and refresh, a schedule layout at 390px and 320px with no page overflow, preserved Motion event access, and working Tasks navigation. Production deploy `6ae98f4791219d489ac3f956` is ready and its published assets match the local build. The workspace owner confirmed that Google Calendar events appear on the live Calendar page. The automated Opera session still showed a blank embedded frame; the separate Google Calendar link remains available for affected browser sessions. Google calendar sharing was not changed. Actual iPhone home-screen Google-session behavior still requires device acceptance.
 
 ## Simplified workspace update, October 27
 
