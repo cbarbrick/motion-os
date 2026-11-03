@@ -14,7 +14,7 @@ npm run dev
 
 Open the local URL printed by Vite. With the example environment values left blank, choose **View sample** to develop the interface using browser-only sample data. This is enough to work on layouts and most interaction flows. Your local edits to sample records do not change the live workspace.
 
-The Calendar page embeds the real shared Google Calendar, including in sample mode. Viewing its events requires a separate Google session and the calendar owner's sharing permission. The embed is a view into Google Calendar; it does not synchronize events with Motion's database. Use **Open Google Calendar** for sign-in or editing and **Refresh** to reload the embed.
+The Calendar page uses shared workspace events. Sample calendar records stay in the browser and never sync to Google. Production has an owner-connected Motion OS Google calendar: any active workspace member can add or edit events in the OS, and the server syncs those changes. See README.md for the production-only connection and queue. Keep credentials out of local frontend variables and Git.
 
 Connected sign-in and database work need separate environment configuration and authorized access. Coordinate that with Charlotte before using live resources. Localhost is not currently an allowed authentication redirect. Reuse the resources documented in README.md; do not create replacement production projects.
 
