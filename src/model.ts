@@ -93,9 +93,52 @@ export interface TaskNotification {
   item_id: string;
   item_version: number;
   task_title: string;
-  kind: "task_added";
+  kind: "task_added" | "event_added" | "deliverable_added" | "task_available";
   created_at: string;
   read_at: string | null;
+}
+export function notificationText(
+  n: Pick<TaskNotification, "actor_name" | "kind">,
+) {
+  const actions = {
+    task_added: "added you to a task",
+    event_added: "added a calendar event",
+    deliverable_added: "added a deliverable",
+    task_available: "posted a task anyone can take",
+  };
+  return `${n.actor_name} ${actions[n.kind] || actions.task_added}`;
+}
+export function notificationRecipients(
+  item: Item,
+  previous: Item | null,
+  members: Member[],
+  actor: string,
+): { recipient_id: string; kind: TaskNotification["kind"] }[] {
+  const people = taskPeople(item),
+    oldPeople = previous ? taskPeople(previous) : [];
+  const deliverable = (i: Item) =>
+    !!(i.week_of || i.due_date || i.category === "Content" || i.event_id);
+  let broadcast: TaskNotification["kind"] | null = null;
+  if (item.kind === "event" && !previous) broadcast = "event_added";
+  if (item.kind === "task" && item.status !== "done") {
+    if (deliverable(item) && (!previous || !deliverable(previous)))
+      broadcast = "deliverable_added";
+    else if (
+      !people.length &&
+      (!previous || oldPeople.length || previous.status === "done")
+    )
+      broadcast = "task_available";
+  }
+  return members
+    .filter(
+      (m) =>
+        m.user_id !== actor &&
+        (broadcast ||
+          (item.kind === "task" &&
+            people.includes(m.user_id) &&
+            !oldPeople.includes(m.user_id))),
+    )
+    .map((m) => ({ recipient_id: m.user_id, kind: broadcast || "task_added" }));
 }
 export function taskPeople(
   item: Pick<Item, "assignee_id" | "collaborator_ids">,

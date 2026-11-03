@@ -9,7 +9,7 @@ import {
   makeDemo,
   inputOf,
   sponsorshipInputOf,
-  taskPeople,
+  notificationRecipients,
   type TaskNotification,
   type Snapshot,
   type Item,
@@ -370,28 +370,23 @@ export function useWorkspace() {
         ...data,
         items: [updated, ...data.items.filter((i) => i.id !== updated.id)],
         notifications: [
-          ...(kind === "task"
-            ? taskPeople(updated)
-                .filter(
-                  (id) =>
-                    id !== userId && !(item && taskPeople(item).includes(id)),
-                )
-                .map((recipient_id): TaskNotification => ({
-                  id: crypto.randomUUID(),
-                  workspace_id: data.workspace.id,
-                  recipient_id,
-                  actor_id: userId,
-                  actor_name:
-                    data.members.find((m) => m.user_id === userId)?.name ||
-                    "Teammate",
-                  item_id: updated.id,
-                  item_version: updated.version,
-                  task_title: updated.title,
-                  kind: "task_added",
-                  created_at: now,
-                  read_at: null,
-                }))
-            : []),
+          ...notificationRecipients(updated, item, data.members, userId).map(
+            ({ recipient_id, kind }): TaskNotification => ({
+              id: crypto.randomUUID(),
+              workspace_id: data.workspace.id,
+              recipient_id,
+              actor_id: userId,
+              actor_name:
+                data.members.find((m) => m.user_id === userId)?.name ||
+                "Teammate",
+              item_id: updated.id,
+              item_version: updated.version,
+              task_title: updated.title,
+              kind,
+              created_at: now,
+              read_at: null,
+            }),
+          ),
           ...data.notifications,
         ],
       };

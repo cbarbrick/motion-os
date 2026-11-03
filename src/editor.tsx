@@ -15,6 +15,7 @@ import {
   type Snapshot,
 } from "./model";
 import { PeoplePicker } from "./people-picker";
+import { ItemPhotos, uploadItemPhoto, type PendingPhoto } from "./item-photos";
 import { eventStartDay, eventEndDay, localDateTime } from "./event-time";
 const draftPrefix = "motion-draft-v1:";
 export function Editor({
@@ -68,6 +69,14 @@ export function Editor({
     [failure, setFailure] = useState(""),
     [busy, setBusy] = useState(false),
     [storageFailure, setStorageFailure] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false),
+    [photoRevision, setPhotoRevision] = useState(0);
+  const photosRef = useRef<PendingPhoto[]>([]);
+  function changePhotos(photos: PendingPhoto[]) {
+    photosRef.current = photos;
+    setPendingPhotos(photos);
+  }
   const latest = useRef(form),
     current = useRef(
       item ? { ...item, version: draftVersion.current ?? item.version } : null,
@@ -116,21 +125,42 @@ export function Editor({
     );
   }
   async function flush() {
-    if (saving.current || !editable || !valid(latest.current)) return;
+    if (saving.current || photoBusy || !editable || !valid(latest.current))
+      return;
     saving.current = true;
     setBusy(true);
     setFailure("");
     try {
+      // Keep text changes made during an upload in the same serialized save.
       do {
-        const snapshot = structuredClone(latest.current),
-          json = JSON.stringify(snapshot);
-        if (current.current && json === lastSaved.current) break;
-        setState(preview ? "Saving to this browser..." : "Saving...");
-        const saved = await saveRef.current(kind, current.current, snapshot);
-        current.current = saved;
-        lastSaved.current = json;
-        if (!mounted.current) return;
-        remember(latest.current);
+        do {
+          const snapshot = structuredClone(latest.current),
+            json = JSON.stringify(snapshot);
+          if (current.current && json === lastSaved.current) break;
+          setState(preview ? "Saving to this browser..." : "Saving...");
+          const saved = await saveRef.current(kind, current.current, snapshot);
+          current.current = saved;
+          lastSaved.current = json;
+          if (!mounted.current) return;
+          remember(latest.current);
+          setState(
+            preview
+              ? "Saved in this browser"
+              : kind === "event"
+                ? "Saved in Motion OS. Google sync status is on Calendar."
+                : "Saved to workspace",
+          );
+        } while (JSON.stringify(latest.current) !== lastSaved.current);
+        while (current.current && photosRef.current.length) {
+          setState("Uploading photos…");
+          const photo = photosRef.current[0];
+          await uploadItemPhoto(current.current.id, photo, preview);
+          changePhotos(photosRef.current.filter((p) => p.id !== photo.id));
+          URL.revokeObjectURL(photo.url);
+          setPhotoRevision((n) => n + 1);
+        }
+      } while (JSON.stringify(latest.current) !== lastSaved.current);
+      if (current.current)
         setState(
           preview
             ? "Saved in this browser"
@@ -138,7 +168,6 @@ export function Editor({
               ? "Saved in Motion OS. Google sync status is on Calendar."
               : "Saved to workspace",
         );
-      } while (JSON.stringify(latest.current) !== lastSaved.current);
       try {
         localStorage.removeItem(key);
       } catch {
@@ -147,7 +176,11 @@ export function Editor({
     } catch (e) {
       if (mounted.current) {
         setFailure((e as Error).message);
-        setState("Not saved. Draft kept.");
+        setState(
+          current.current && photosRef.current.length
+            ? "Item saved. Some photos still need uploading; retry Save."
+            : "Not saved. Draft kept.",
+        );
       }
     } finally {
       saving.current = false;
@@ -171,6 +204,7 @@ export function Editor({
     const unload = (e: BeforeUnloadEvent) => {
       if (
         saving.current ||
+        photosRef.current.length > 0 ||
         (current.current &&
           JSON.stringify(latest.current) !== lastSaved.current)
       ) {
@@ -185,18 +219,23 @@ export function Editor({
       ? data.items.filter((i) => i.kind === "task" && i.event_id === item?.id)
       : [];
   async function close(): Promise<boolean> {
-    if (saving.current) return false;
+    if (saving.current || photoBusy) return false;
     if (
-      item &&
+      current.current &&
       editable &&
-      JSON.stringify(latest.current) !== lastSaved.current
+      (JSON.stringify(latest.current) !== lastSaved.current ||
+        photosRef.current.length > 0)
     ) {
       if (!valid(latest.current)) {
         setFailure("Add a title and check the date and link before saving.");
         return false;
       }
       await flush();
-      if (JSON.stringify(latest.current) !== lastSaved.current) return false;
+      if (
+        JSON.stringify(latest.current) !== lastSaved.current ||
+        photosRef.current.length
+      )
+        return false;
     }
     onClose();
     return true;
@@ -228,7 +267,7 @@ export function Editor({
         <button
           className="icon-button"
           aria-label="Close details"
-          disabled={busy}
+          disabled={busy || photoBusy}
           onClick={close}
         >
           <X size={20} />
@@ -634,6 +673,18 @@ export function Editor({
             </details>
           )}
         </fieldset>
+        {(kind === "task" || kind === "todo") && (
+          <ItemPhotos
+            itemId={current.current?.id || null}
+            preview={preview}
+            privateTodo={kind === "todo"}
+            pending={pendingPhotos}
+            onPending={changePhotos}
+            disabled={busy || !editable}
+            onBusy={setPhotoBusy}
+            revision={photoRevision}
+          />
+        )}
         {kind === "event" && item && (
           <section className="linked-tasks">
             <h3>Event tasks</h3>
@@ -740,14 +791,15 @@ export function Editor({
       </div>
       <div className="editor-footer">
         <span role="status">{state || (item ? "Autosave on" : "")}</span>
-        {!item ? (
+        {!item || pendingPhotos.length > 0 ? (
           <button
             className="button primary"
-            disabled={busy || !valid(form)}
+            disabled={busy || photoBusy || !valid(form)}
             onClick={async () => {
               await flush();
               if (
                 current.current &&
+                photosRef.current.length === 0 &&
                 lastSaved.current === JSON.stringify(latest.current)
               )
                 onClose();
@@ -757,7 +809,11 @@ export function Editor({
             <Check size={16} />
           </button>
         ) : (
-          <button className="button" disabled={busy} onClick={close}>
+          <button
+            className="button"
+            disabled={busy || photoBusy}
+            onClick={close}
+          >
             Close
           </button>
         )}

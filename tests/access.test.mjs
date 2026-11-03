@@ -191,8 +191,10 @@ test('owner assignment notifies the teammate; self-claim and self-assignment sta
  const own=(await as(owner,"select * from public.save_item($1,'task',null,0,$2)",[w,{title:'My own work',assignee_id:owner}])).rows[0];
  assert.equal((await as(owner,'select * from public.notifications where item_id=$1',[own.id])).rows.length,0);
  const open=(await as(owner,"select * from public.save_item($1,'task',null,0,$2)",[w,{title:'Open work'}])).rows[0];
+ const available=(await as(member,'select * from public.notifications where item_id=$1',[open.id])).rows;
+ assert.equal(available.length,1);assert.equal(available[0].kind,'task_available');
  await as(member,'select public.claim_task($1)',[open.id]);
- assert.equal((await as(member,'select * from public.notifications where item_id=$1',[open.id])).rows.length,0);
+ assert.equal((await as(member,'select * from public.notifications where item_id=$1',[open.id])).rows.length,1);
 });
 test('task people cannot cross workspaces or expose private to-dos',async()=>{
  await assert.rejects(as(owner,"select public.save_item($1,'task',null,0,$2)",[w,{title:'Invalid team',collaborator_ids:[outsider]}]),/must belong to this workspace/);

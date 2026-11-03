@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, ChevronRight, X } from "lucide-react";
-import { dateLabel, type Item, type TaskNotification } from "./model";
+import {
+  dateLabel,
+  notificationText,
+  type Item,
+  type TaskNotification,
+} from "./model";
 import type { useWorkspace } from "./use-workspace";
 
 export function Notifications({
@@ -62,7 +67,7 @@ export function Notifications({
       {incoming && (
         <div className="toast notification-toast" role="status">
           <span>
-            {incoming.actor_name} added you to a task
+            {notificationText(incoming)}
             <br />
             {incoming.task_title}
           </span>
@@ -75,7 +80,7 @@ export function Notifications({
             View
           </button>
           <button
-            aria-label="Dismiss task notification"
+            aria-label="Dismiss notification"
             onClick={() => setIncoming(null)}
           >
             <X size={16} />
@@ -151,7 +156,8 @@ export function Notifications({
         <div className="notification-list" aria-busy={busy}>
           {visible.map((n) => {
             const item = store.data?.items.find(
-              (i) => i.id === n.item_id && i.kind === "task",
+              (i) =>
+                i.id === n.item_id && (i.kind === "task" || i.kind === "event"),
             );
             return (
               <article
@@ -165,7 +171,7 @@ export function Notifications({
                 >
                   <span className="notification-dot" />
                   <span>
-                    <strong>{n.actor_name} added you to a task</strong>
+                    <strong>{notificationText(n)}</strong>
                     <span className="notification-task">
                       {item?.title || n.task_title}
                     </span>
@@ -176,7 +182,7 @@ export function Notifications({
                         hour: "numeric",
                         minute: "2-digit",
                       })}
-                      {!item ? " · Task unavailable" : ""}
+                      {!item ? " · Item unavailable" : ""}
                     </small>
                   </span>
                   {item && <ChevronRight size={18} />}
