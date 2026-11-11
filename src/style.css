@@ -2648,17 +2648,22 @@ body:has(dialog[open]) { overflow: hidden; }
 .native-event-description { white-space:pre-wrap; overflow-wrap:anywhere; }
 .motion-calendar button:focus-visible, .motion-calendar summary:focus-visible { outline:2px solid #008dbd; outline-offset:-2px; }
 @media(max-width:650px) {
+  .motion-calendar > .heading { flex-direction:column; align-items:stretch; gap:12px; }
+  .motion-calendar > .heading > .button { width:100%; justify-content:center; white-space:nowrap; min-height:48px; }
   .native-calendar-toolbar { padding:14px; gap:12px; }
   .native-calendar-toolbar h2 { font-size:18px; order:-1; flex-basis:100%; }
   .native-calendar-navigation { gap:0; }
   .native-calendar-navigation .button { padding:8px 10px; }
   .native-calendar-navigation .icon-button { min-width:32px; }
-  .native-calendar-views { margin-left:auto; }
-  .native-calendar-views button { padding:9px 10px; font-size:12px; }
-  .native-calendar-filters { padding:12px; gap:10px; }
-  .native-calendar-filters label { flex:1 1 115px; }
-  .native-calendar-filters input, .native-calendar-filters select { font-size:16px; width:100%; }
-  .native-calendar-count { margin-bottom:12px; }
+  .native-calendar-views { width:100%; margin-left:0; }
+  .native-calendar-views button { flex:1; min-width:0; padding:9px 10px; font-size:14px; min-height:48px; }
+  /* Native phone date/select controls need a full row, not a shrinking flex column. */
+  .native-calendar-filters { display:grid; grid-template-columns:minmax(0,1fr); align-items:stretch; padding:14px; gap:12px; }
+  .native-calendar-filters label { width:100%; min-width:0; margin:0; font-size:12px; }
+  .native-calendar-filters input, .native-calendar-filters select { display:block; box-sizing:border-box; min-width:0; width:100%; max-width:100%; min-height:48px; font-size:16px; }
+  .native-calendar-filters input[type="date"] { overflow:hidden; }
+  .native-calendar-filters input[type="date"]::-webkit-date-and-time-value { min-width:0; text-align:left; }
+  .native-calendar-count { margin:0; justify-self:end; }
   .native-month-day { min-height:110px; padding:4px 2px; }
   .native-day-number { width:32px; height:32px; font-size:12px; }
   .native-event-chip { padding:4px 2px; border-left-width:2px; }
