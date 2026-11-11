@@ -18,6 +18,7 @@ import {
   Menu,
   Plus,
   Search,
+  Trash2,
   Users,
   WifiOff,
   X,
@@ -69,6 +70,7 @@ export function App() {
       kind: Kind;
       item: Item | null;
       initial?: Partial<ItemInput>;
+      startWithDeleteConfirmation?: boolean;
     } | null>(null),
     [toast, setToast] = useState(""),
     [install, setInstall] = useState(false);
@@ -94,6 +96,8 @@ export function App() {
     setSearch("");
   };
   const open = (item: Item) => setEditor({ kind: item.kind, item });
+  const requestDelete = (item: Item) =>
+    setEditor({ kind: item.kind, item, startWithDeleteConfirmation: true });
   const create = (kind: Kind, initial?: Partial<ItemInput>) =>
     setEditor({ kind, item: null, initial });
   if (!store.authReady || store.loading)
@@ -158,7 +162,13 @@ export function App() {
       setToast((e as Error).message);
     }
   }
-  const cardProps = { data, onOpen: open, onClaim: claim, onDone: toggleDone };
+  const cardProps = {
+    data,
+    onOpen: open,
+    onClaim: claim,
+    onDone: toggleDone,
+    onRequestDelete: requestDelete,
+  };
   return (
     <div className="shell">
       <a href="#main" className="skip">
@@ -476,6 +486,7 @@ export function App() {
                   data={data}
                   userId={store.userId}
                   onOpen={open}
+                  onRequestDelete={requestDelete}
                   onClaim={claim}
                   onDone={toggleDone}
                   onCreate={(person, selectedWeek) =>
@@ -497,6 +508,7 @@ export function App() {
                     create("task", { assignee_id: person, week_of: week })
                   }
                   onOpen={open}
+                  onRequestDelete={requestDelete}
                   onClaim={claim}
                   onDone={toggleDone}
                   onCreate={(initial) =>
@@ -776,12 +788,14 @@ function ItemRow({
   onOpen,
   onClaim,
   onDone,
+  onRequestDelete,
 }: {
   item: Item;
   data: Snapshot;
   onOpen: (i: Item) => void;
   onClaim: (i: Item) => void;
   onDone: (i: Item) => void;
+  onRequestDelete: (i: Item) => void;
 }) {
   const owner = data.members.find((m) => m.user_id === item.assignee_id);
   return (
@@ -823,8 +837,30 @@ function ItemRow({
             Claim task <Plus size={12} />
           </button>
         ) : null}
+        {item.kind === "task" && (
+          <TaskDeleteButton item={item} onRequestDelete={onRequestDelete} />
+        )}
       </div>
     </div>
+  );
+}
+function TaskDeleteButton({
+  item,
+  onRequestDelete,
+}: {
+  item: Item;
+  onRequestDelete: (item: Item) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="text-button task-delete-button"
+      aria-label={`Delete task: ${item.title}`}
+      onClick={() => onRequestDelete(item)}
+    >
+      <Trash2 size={16} aria-hidden="true" />
+      Delete
+    </button>
   );
 }
 function EventSummary({
@@ -877,6 +913,7 @@ function TeamWeek({
   onOpen,
   onClaim,
   onDone,
+  onRequestDelete,
   onCreate,
 }: {
   embedded?: boolean;
@@ -884,6 +921,7 @@ function TeamWeek({
   onOpen: (i: Item) => void;
   onClaim: (i: Item) => void;
   onDone: (i: Item) => void;
+  onRequestDelete: (i: Item) => void;
   onCreate: (person: string | null, week: string) => void;
 }) {
   const [week, setWeek] = useState(weekStart());
@@ -994,6 +1032,7 @@ function TeamWeek({
                   onOpen={onOpen}
                   onClaim={onClaim}
                   onDone={onDone}
+                  onRequestDelete={onRequestDelete}
                 />
               ))}
               {!list.length && (
@@ -1014,6 +1053,7 @@ function Weekly({
   onOpen,
   onClaim,
   onDone,
+  onRequestDelete,
   onCreate,
 }: {
   data: Snapshot;
@@ -1021,6 +1061,7 @@ function Weekly({
   onOpen: (i: Item) => void;
   onClaim: (i: Item) => void;
   onDone: (i: Item) => void;
+  onRequestDelete: (i: Item) => void;
   onCreate: (person: string, week: string) => void;
 }) {
   const [week, setWeek] = useState(weekStart()),
@@ -1110,6 +1151,7 @@ function Weekly({
               onOpen={onOpen}
               onClaim={onClaim}
               onDone={onDone}
+              onRequestDelete={onRequestDelete}
             />
           ))}
           {!tasks.length && <Empty title="No tasks this week" text="" />}
@@ -1126,6 +1168,7 @@ function Weekly({
               onOpen={onOpen}
               onClaim={onClaim}
               onDone={onDone}
+              onRequestDelete={onRequestDelete}
             />
           ))}
         </section>
@@ -1141,6 +1184,7 @@ function Board({
   onOpen,
   onClaim,
   onDone,
+  onRequestDelete,
   onCreate,
   onPlan,
 }: {
@@ -1151,6 +1195,7 @@ function Board({
   onOpen: (item: Item) => void;
   onClaim: (item: Item) => void;
   onDone: (item: Item) => void;
+  onRequestDelete: (item: Item) => void;
   onCreate: (initial?: Partial<ItemInput>) => void;
   onPlan: (person: string | null, week: string) => void;
 }) {
@@ -1211,6 +1256,7 @@ function Board({
               Take task
             </button>
           )}
+          <TaskDeleteButton item={task} onRequestDelete={onRequestDelete} />
         </div>
       </article>
     );
@@ -1255,6 +1301,7 @@ function Board({
           onOpen={onOpen}
           onClaim={onClaim}
           onDone={onDone}
+          onRequestDelete={onRequestDelete}
           onCreate={onPlan}
         />
       ) : (

@@ -31,6 +31,7 @@ export function Editor({
   userId,
   preview,
   initial,
+  startWithDeleteConfirmation = false,
   onSave,
   onDelete,
   onClose,
@@ -44,6 +45,7 @@ export function Editor({
   userId: string;
   preview: boolean;
   initial?: Partial<ItemInput>;
+  startWithDeleteConfirmation?: boolean;
   onSave: (
     kind: Kind,
     item: Item | null,
@@ -95,9 +97,10 @@ export function Editor({
     [busy, setBusy] = useState(false),
     [storageFailure, setStorageFailure] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleting = useRef(false);
+  const [confirmDelete, setConfirmDelete] = useState(startWithDeleteConfirmation);
+  const deleting = useRef(startWithDeleteConfirmation);
   const deleteButton = useRef<HTMLButtonElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false),
     [photoRevision, setPhotoRevision] = useState(0);
   const photosRef = useRef<PendingPhoto[]>([]);
@@ -261,6 +264,9 @@ export function Editor({
     };
   }, []);
   useEffect(() => {
+    if (confirmDelete) keepButton.current?.focus();
+  }, [confirmDelete]);
+  useEffect(() => {
     if (
       (!pendingSave.current &&
         JSON.stringify(form) === lastSaved.current &&
@@ -334,6 +340,10 @@ export function Editor({
     return true;
   }
   function cancelDelete() {
+    if (startWithDeleteConfirmation) {
+      onClose();
+      return;
+    }
     deleting.current = false;
     setConfirmDelete(false);
     deleteButton.current?.focus();
@@ -360,7 +370,7 @@ export function Editor({
   return (
     <dialog
       ref={dialog}
-      className="editor"
+      className={confirmDelete ? "editor editor-delete" : "editor"}
       aria-labelledby="item-editor-title"
       onCancel={(e) => {
         e.preventDefault();
@@ -371,22 +381,24 @@ export function Editor({
       <div className="editor-header">
         <div>
           <h2 id="item-editor-title">
-            {record
-              ? `Edit ${kind === "todo" ? "to-do" : kind}`
-              : kind === "task"
-                ? "New task"
-                : kind === "event"
-                  ? "New event"
-                  : kind === "idea"
-                    ? "New idea"
-                    : "New to-do"}
+            {confirmDelete
+              ? `Delete ${kind}`
+              : record
+                ? `Edit ${kind === "todo" ? "to-do" : kind}`
+                : kind === "task"
+                  ? "New task"
+                  : kind === "event"
+                    ? "New event"
+                    : kind === "idea"
+                      ? "New idea"
+                      : "New to-do"}
           </h2>
         </div>
         <button
           className="icon-button"
           aria-label="Close details"
-          disabled={busy || photoBusy || confirmDelete}
-          onClick={close}
+          disabled={busy || photoBusy}
+          onClick={confirmDelete ? cancelDelete : close}
         >
           <X size={20} />
         </button>
@@ -929,6 +941,7 @@ export function Editor({
             )}
             <div className="editor-actions">
               <button
+                ref={keepButton}
                 className="button"
                 disabled={busy}
                 autoFocus
@@ -963,7 +976,7 @@ export function Editor({
                   }}
                 >
                   <Trash2 size={16} />
-                  Delete
+                  Delete {kind}
                 </button>
               )}
               {!record || pendingPhotos.length > 0 ? (
