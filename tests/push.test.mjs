@@ -5,7 +5,7 @@ import {randomUUID,createECDH,randomBytes} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import ts from 'typescript';
 import vm from 'node:vm';
-const source=await readFile(new URL('../netlify/lib/push.ts',import.meta.url),'utf8');
+const source=await readFile(new URL('../server/push.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {validPushTarget,pushPayload,pushResult,deliverPushJobs}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const ec=createECDH('prime256v1');ec.generateKeys();
@@ -27,7 +27,7 @@ await as(member,"select public.join_workspace($1,'Member')",[token]);
 const other=(await as(outsider,"select public.create_workspace('Other','Outsider') as id")).rows[0].id;
 const subscribe=async(user,name)=>(await as(user,'select public.save_push_subscription($1,$2,$3) as id',[target(name).endpoint,keys.p256dh,keys.auth])).rows[0].id;
 const create=async(title='Available task')=>(await as(owner,"select * from public.save_item($1,'task',null,0,$2)",[w,{title}])).rows[0];
-const claim=async(workspace=w)=>(await worker('select public.claim_push_deliveries($1) as jobs',[workspace])).rows[0].jobs;
+const claim=async(workspace=w)=>(await worker('select public.claim_push_deliveries_v2($1) as jobs',[workspace])).rows[0].jobs;
 const finish=async(job,status='sent',lease=job.lease)=>worker('select public.finish_push_delivery($1,$2,$3)',[job.id,lease,status]);
 let sub;
 test('device capabilities are private and only the server can process deliveries',async()=>{
@@ -37,7 +37,7 @@ test('device capabilities are private and only the server can process deliveries
  await as(owner,'select public.remove_push_subscription($1)',[target('member').endpoint]);
  assert.equal((await as(member,'select public.get_push_subscription($1) as id',[target('member').endpoint])).rows[0].id,sub);
  await assert.rejects(as(member,'select * from motion_private.push_subscriptions'),/permission denied/);
- for(const sql of ['select public.claim_push_deliveries(null)',`select public.prepare_push_test('${sub}','${member}')`,`select public.finish_push_delivery('${sub}','${sub}','sent')`])await assert.rejects(as(member,sql),/permission denied/);
+ for(const sql of ['select public.claim_push_deliveries_v2(null)',`select public.prepare_push_test('${sub}','${member}')`,`select public.finish_push_delivery('${sub}','${sub}','sent')`])await assert.rejects(as(member,sql),/permission denied/);
  await assert.rejects(db.transaction(async tx=>{await tx.exec('set local role anon');await tx.query('select public.save_push_subscription($1,$2,$3)',[target('anon').endpoint,keys.p256dh,keys.auth]);}),/permission denied/);
 });
 test('registration is idempotent, validates providers and prevents capability theft',async()=>{
@@ -99,13 +99,13 @@ test('push payloads disclose no record content and retry status is bounded',asyn
 });
 test('service worker shows a visible push and opens only the Motion OS inbox',async()=>{
  const handlers={},shown=[],opened=[];let closed=false;
- const scope={location:{origin:'https://motion-team-os.netlify.app'},addEventListener:(name,fn)=>handlers[name]=fn,
+ const scope={location:{origin:'https://motion-team-os.vercel.app'},addEventListener:(name,fn)=>handlers[name]=fn,
  registration:{showNotification:async(...args)=>shown.push(args)},clients:{matchAll:async()=>[],openWindow:async url=>opened.push(url)}};
  vm.runInNewContext(await readFile(new URL('../public/sw.js',import.meta.url),'utf8'),{self:scope,URL});
  let pending;
  handlers.push({data:{json:()=>({body:'A new task is available.',url:'https://evil.test'})},waitUntil:p=>pending=p});await pending;
  assert.equal(shown[0][0],'Motion OS');assert.equal(shown[0][1].data.url,'/#notifications');
  handlers.notificationclick({notification:{close:()=>closed=true,data:{url:'https://evil.test'}},waitUntil:p=>pending=p});await pending;
- assert.equal(closed,true);assert.deepEqual(opened,['https://motion-team-os.netlify.app/#notifications']);
+ assert.equal(closed,true);assert.deepEqual(opened,['https://motion-team-os.vercel.app/#notifications']);
 });
 test.after(()=>db.close());

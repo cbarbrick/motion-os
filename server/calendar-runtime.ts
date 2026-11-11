@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getStore } from "@netlify/blobs";
-import type { Context } from "@netlify/functions";
+import { privateStore } from "./private-store.js";
 import {
   CalendarError,
   googleRequest,
@@ -8,13 +7,14 @@ import {
   seal,
   unseal,
   syncGoogleEvent,
+  deleteGoogleEvent,
   calendarRange,
   listGoogleEvents,
-} from "./google-calendar";
-import type { Item } from "../../src/model";
-const env = (key: string) => Netlify.env.get(key) || "";
-export function runtime(context: Context) {
-  if (context.deploy.context !== "production")
+} from "./google-calendar.js";
+import type { Item } from "../src/model.js";
+const env = (key: string) => process.env[key] || "";
+export function runtime() {
+  if (process.env.VERCEL_ENV !== "production")
     throw new CalendarError(
       "Google syncing is available on the production site only.",
       403,
@@ -35,7 +35,7 @@ export function runtime(context: Context) {
     db: createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
     }),
-    blobs: getStore({ name: "motion-google-calendar", consistency: "strong" }),
+    blobs: privateStore("motion-google-calendar"),
     encryption: env("CALENDAR_ENCRYPTION_KEY"),
     clientId: env("CALENDAR_GOOGLE_CLIENT_ID"),
     clientSecret: env("CALENDAR_GOOGLE_CLIENT_SECRET"),
@@ -120,14 +120,16 @@ export async function readCalendar(
       .maybeSingle(),
     rt.db
       .from("calendar_sync")
-      .select("item_id,requested_version,synced_version,last_error")
+      .select(
+        "item_id,requested_version,synced_version,last_error,delete_requested",
+      )
       .eq("workspace_id", workspace),
   ]);
   if (registered.error || sync.error)
     throw new CalendarError(
       "Could not read the calendar connection. Try refreshing again.",
     );
-  const result: import("../../src/calendar-feed").CalendarFeed = {
+  const result: import("../src/calendar-feed").CalendarFeed = {
     connection: registered.data,
     sync: sync.data || [],
     events: [],
@@ -156,6 +158,12 @@ export async function readCalendar(
     workspace,
     range.start,
     range.end,
+  );
+  const removed = new Set(
+    (sync.data || []).filter((s) => s.delete_requested).map((s) => s.item_id),
+  );
+  result.events = result.events.filter(
+    (e) => !e.motion_item || !removed.has(e.motion_item),
   );
   return result;
 }
@@ -186,6 +194,25 @@ export async function connect(
       403,
     );
   let saved = await connection(rt, workspaceId);
+  if (!saved) {
+    // A hosting migration may require reconnecting credentials. Reuse the
+    // registered calendar rather than creating a second team calendar.
+    const registered = await rt.db
+      .from("calendar_connections")
+      .select("calendar_id,connected_by")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (registered.error)
+      throw new CalendarError(
+        "Could not check the existing calendar. Try again.",
+      );
+    if (registered.data)
+      saved = {
+        calendarId: registered.data.calendar_id,
+        owner: registered.data.connected_by,
+        refreshToken,
+      };
+  }
   if (saved && saved.owner !== user.id)
     throw new CalendarError(
       "The existing calendar connection belongs to a different workspace owner.",
@@ -258,21 +285,27 @@ export async function drain(
     tokens = new Map<string, string>();
   let synced = 0;
   for (let i = 0; i < limit && Date.now() - started < 20000; i++) {
-    const result = await rt.db.rpc("claim_calendar_sync", {
+    const result = await rt.db.rpc("claim_calendar_sync_v2", {
       p_workspace: workspace,
     });
     if (result.error) throw new Error("Could not claim calendar queue");
     if (!result.data) break;
     const { job, event, calendar_id } = result.data as {
-      job: { item_id: string; lease_id: string };
-      event: Item;
+      job: {
+        item_id: string;
+        lease_id: string;
+        workspace_id: string;
+        requested_version: number;
+        delete_requested: boolean;
+      };
+      event: Item | null;
       calendar_id: string;
     };
     let error: string | null = null;
     try {
-      let token = tokens.get(event.workspace_id);
+      let token = tokens.get(job.workspace_id);
       if (!token) {
-        const c = await connection(rt, event.workspace_id);
+        const c = await connection(rt, job.workspace_id);
         if (!c || c.calendarId !== calendar_id)
           throw new CalendarError(
             "The workspace owner needs to connect Google Calendar.",
@@ -282,9 +315,17 @@ export async function drain(
           rt.clientId,
           rt.clientSecret,
         );
-        tokens.set(event.workspace_id, token);
+        tokens.set(job.workspace_id, token);
       }
-      await syncGoogleEvent(token, calendar_id, event);
+      if (job.delete_requested)
+        await deleteGoogleEvent(
+          token,
+          calendar_id,
+          job.item_id,
+          job.workspace_id,
+        );
+      else if (event) await syncGoogleEvent(token, calendar_id, event);
+      else throw new CalendarError("Event missing from sync queue.");
       synced++;
     } catch (e) {
       error =
@@ -295,7 +336,7 @@ export async function drain(
     const completed = await rt.db.rpc("finish_calendar_sync", {
       p_item: job.item_id,
       p_lease: job.lease_id,
-      p_version: event.version,
+      p_version: job.requested_version,
       p_error: error,
     });
     if (completed.error) throw new Error("Could not finish calendar queue");

@@ -5,7 +5,7 @@ import ts from 'typescript';
 import vm from 'node:vm';
 const compile=(source,common=false)=>ts.transpileModule(source,{compilerOptions:{module:common?ts.ModuleKind.CommonJS:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const dataImport=async path=>import('data:text/javascript;base64,'+Buffer.from(compile(await readFile(new URL(path,import.meta.url),'utf8'))).toString('base64'));
-const google=await dataImport('../netlify/lib/google-calendar.ts');
+const google=await dataImport('../server/google-calendar.ts');
 const {calendarEntries}=await dataImport('../src/calendar-feed.ts');
 const workspace='00000000-0000-4000-8000-000000000001', user='00000000-0000-4000-8000-000000000002', id='00000000-0000-4000-8000-000000000003';
 const start='2026-11-01T04:00:00.000Z',end='2026-12-01T05:00:00.000Z';
@@ -52,8 +52,8 @@ test('invalid ranges, Google denial and repeated pagination fail explicitly with
  await assert.rejects(google.listGoogleEvents('t','c',workspace,start,end,async()=>Response.json({nextPageToken:'same',items:[]})),/too many/);
  await assert.rejects(google.listGoogleEvents('t','c',workspace,start,end,async()=>Response.json({items:[{id:'broken'}]})),/invalid dates/);
 });
-const runtimeCode=compile(await readFile(new URL('../netlify/lib/calendar-runtime.ts',import.meta.url),'utf8'),true);
-const handlerCode=compile(await readFile(new URL('../netlify/functions/calendar-events.mts',import.meta.url),'utf8'),true);
+const runtimeCode=compile(await readFile(new URL('../server/calendar-runtime.ts',import.meta.url),'utf8'),true);
+const handlerCode=compile(await readFile(new URL('../server/handlers/calendar-events.ts',import.meta.url),'utf8'),true);
 function setup({member=true,connected=true,mismatch=false,upstream=200}={}){
  const calls=[],encryption=Buffer.alloc(32,1).toString('base64'),rt={encryption,clientId:'client',clientSecret:'secret',
   blobs:{get:async key=>{calls.push(['blob',key]);return google.seal({refreshToken:'server-only-refresh',calendarId:mismatch?'wrong':feed.connection.calendar_id,owner:user},encryption);}},
@@ -64,7 +64,7 @@ function setup({member=true,connected=true,mismatch=false,upstream=200}={}){
  const mockedGoogle={...google,refreshGoogle:(...args)=>google.refreshGoogle(...args,fetcher),listGoogleEvents:(...args)=>google.listGoogleEvents(...args,fetcher)};
  const exports={};vm.runInNewContext(runtimeCode,{exports,require:name=>name.includes('google-calendar')?mockedGoogle:{},URL,Response,AbortSignal,Date,fetch:fetcher});
  const handler={};vm.runInNewContext(handlerCode,{exports:handler,require:()=>({...exports,runtime:()=>rt})});
- const request=(body={workspace,start,end},headers={})=>new Request('https://motion.example/.netlify/functions/calendar-events',{method:'POST',headers:{origin:'https://motion.example',authorization:'Bearer valid',...headers},body:JSON.stringify(body)});
+ const request=(body={workspace,start,end},headers={})=>new Request('https://motion.example/api/calendar-events',{method:'POST',headers:{origin:'https://motion.example',authorization:'Bearer valid',...headers},body:JSON.stringify(body)});
  return {calls,request,run:req=>handler.default(req,{})};
 }
 test('calendar feed requires same-origin verified workspace membership before accessing Google credentials',async()=>{
@@ -82,4 +82,8 @@ test('missing connection is explicit; mismatched credentials and upstream errors
  const no=setup({connected:false});const empty=await no.run(no.request());assert.equal(empty.status,200);assert.equal((await empty.json()).connection,null);assert.equal(no.calls.some(c=>c[0]==='blob'),false);
  const mismatch=setup({mismatch:true});assert.equal((await mismatch.run(mismatch.request())).status,503);assert.equal(mismatch.calls.some(c=>c[0]==='google'),false);
  const failed=setup({upstream:503});const r=await failed.run(failed.request());assert.equal(r.status,503);assert.match((await r.json()).error,/could not be loaded/);
+});
+
+test('deleted Motion events never reappear from a stale Google feed',()=>{
+ assert.deepEqual(calendarEntries([],feed),[]);
 });

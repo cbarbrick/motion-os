@@ -44,7 +44,6 @@ export function calendarEntries(
   feed: CalendarFeed | null,
 ): CalendarEntry[] {
   const local = items.filter((i) => i.kind === "event" && i.starts_at);
-  const ids = new Set(local.map((i) => i.id));
   const entries: CalendarEntry[] = local.map((item) => ({
     id: item.id,
     title: item.title,
@@ -62,7 +61,8 @@ export function calendarEntries(
       ),
   }));
   for (const remote of feed?.events || []) {
-    if (remote.motion_item && ids.has(remote.motion_item)) continue;
+    // A missing Motion item was deleted. Never resurrect its stale Google copy.
+    if (remote.motion_item) continue;
     entries.push({
       ...remote,
       id: `google:${remote.id}`,

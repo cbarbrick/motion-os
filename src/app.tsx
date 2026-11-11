@@ -640,6 +640,10 @@ export function App() {
           userId={store.userId}
           preview={store.preview}
           onSave={store.save}
+          onDelete={async (item) => {
+            await store.remove(item);
+            setToast(item.kind === "event" ? "Event deleted" : "Task deleted");
+          }}
           onClose={() => setEditor(null)}
           onInviteTeam={() => go("team")}
           onOpen={open}

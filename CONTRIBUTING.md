@@ -2,7 +2,7 @@
 
 ## Local setup
 
-Use Node.js 22.12 or newer and npm. The repository is public; collaborators must accept their GitHub invitation before pushing branches to it:
+Use Node.js 24 and npm. The repository is public; collaborators must accept their GitHub invitation before pushing branches to it:
 
 ```sh
 git clone https://github.com/cbarbrick/motion-os.git
@@ -14,7 +14,7 @@ npm run dev
 
 Open the local URL printed by Vite. With the example environment values left blank, choose **View sample** to develop the interface using browser-only sample data. This is enough to work on layouts and most interaction flows. Your local edits to sample records do not change the live workspace.
 
-The Calendar page uses native Day, Week and Month views of shared workspace events, including events linked to athletes. Sample calendar records stay in the browser and never sync to Google. Any active workspace member can add or edit events. Production retains an optional owner-connected Google calendar; server sync does not control whether saved Motion events appear. See README.md for the production-only connection and queue. Keep credentials out of local frontend variables and Git.
+The Calendar page uses native Day, Week and Month views of shared workspace events, including events linked to athletes. Sample calendar records stay in the browser and never sync to Google. Any active workspace member can add, edit or delete events. Production retains an optional owner-connected Google calendar; server sync does not control whether saved Motion events appear. See README.md for the production-only connection and queue. Keep credentials out of local frontend variables and Git.
 
 Connected sign-in and database work need separate environment configuration and authorized access. Coordinate that with Charlotte before using live resources. Localhost is not currently an allowed authentication redirect. Reuse the resources documented in README.md; do not create replacement production projects.
 
@@ -46,7 +46,7 @@ Open a pull request targeting `main`, explain what changed and how you checked i
 ## Project boundaries
 
 - Read AGENTS.md before making changes. Preserve workspace isolation, private to-dos, role checks, atomic claims, and optimistic edit versions.
-- Keep `.env.local`, credentials, `.netlify/`, generated output and local caches out of commits. `.env.example` contains placeholders only.
+- Keep `.env.local`, credentials, `.vercel/`, `.netlify/`, generated output and local caches out of commits. `.env.example` contains placeholders only.
 - Add new database migrations rather than editing migrations that were already applied. Run the database tests for database changes.
-- GitHub repository access does not grant access to the live Motion workspace, Netlify or Supabase administration.
-- Publishing remains a separate manual step using the existing Netlify project. Coordinate releases with Charlotte. Pushing or merging code does not automatically deploy the live app.
+- GitHub repository access does not grant access to the live Motion workspace, Vercel or Supabase administration.
+- The existing Vercel project deploys `main` automatically. Branches create protected previews without production server credentials. Run tests/builds and coordinate releases with Charlotte before merging. See README for manual staging and promotion.

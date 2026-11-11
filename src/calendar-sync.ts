@@ -8,7 +8,7 @@ export async function calendarAction(
 ) {
   const { data } = await supabase!.auth.getSession();
   if (!data.session) throw new Error("Sign in again.");
-  const response = await fetch(`/.netlify/functions/calendar-${action}`, {
+  const response = await fetch(`/api/calendar-${action}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

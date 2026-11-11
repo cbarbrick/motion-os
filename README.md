@@ -6,6 +6,22 @@ Motion’s shared workspace for people, weekly deliverables, athletes, affiliate
 
 This repository contains the `motion-team-os` application. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the branch/pull-request workflow. New contributors can run the app in sample mode without production credentials. GitHub access and live app membership are managed separately.
 
+## Vercel migration and calendar deletion, November 11, 2026
+
+Live app: **[motion-team-os.vercel.app](https://motion-team-os.vercel.app/#events)**. The existing Supabase project and all workspace records are retained. Vercel project `prj_PVcXgG8gJOGU2rpbP2YpplBobQMk` belongs to team `team_TbtRxNi56szVPIzgBbfVjErv` (`cbarbricks-projects`). Its Git integration deploys `main`; other branches create protected previews. Production credentials are scoped to Production only. Preview/sample mode cannot use production server integrations.
+
+Open any saved event or shared task and choose **Delete**, then confirm. Any active workspace member can delete these shared records. Deleting an event detaches its linked tasks instead of deleting their work. The authorized `delete_item` RPC checks workspace membership and optimistic versions; direct deletes remain denied. A durable Google tombstone, serialized behind any in-flight write, removes the remote copy. Stale Google feed entries cannot resurrect a deleted Motion event. Private to-dos are outside this delete action.
+
+Phone controls stack at small widths. Day, Week and Month, date/athlete/type controls, and deletion confirmation were checked in browser viewports at 320, 375, 390 and 430 pixels, including a 320×400 confirmation. These are browser checks, not physical iPhone testing.
+
+Server routes now live under `/api`, with platform-independent handlers in `server/`. Login PKCE handoffs and encrypted Google connection credentials use service-only RPCs backed by private Supabase tables, replacing Netlify Blobs. The one-minute Vercel cron requires `CRON_SECRET` and processes the existing calendar and push queues plus expired handoff cleanup. Legacy Netlify worker RPCs are no-ops after cutover, preventing two hosts from claiming notifications with different sender credentials. Background jobs and requests retain verified auth, workspace isolation, no-store responses and rate limiting. Existing Google calendars are reused when reconnecting. OAuth provider credentials are captured immediately at sign-in, held briefly in memory, and cleared after the server handoff; they are never persisted in browser storage by Motion.
+
+Server-only Production settings: `CALENDAR_SUPABASE_URL`, `CALENDAR_SUPABASE_SECRET`, `CALENDAR_GOOGLE_CLIENT_ID`, `CALENDAR_GOOGLE_CLIENT_SECRET`, `CALENDAR_ENCRYPTION_KEY`, `PUSH_VAPID_PUBLIC_KEY`, `PUSH_VAPID_PRIVATE_KEY`, and `CRON_SECRET`. Netlify secrets cannot be exported. Existing Supabase/Google credentials were recovered through their own project settings; Vercel has its own encryption and push sender keys. The owner reconnected the same registered Google calendar, and the live app successfully loaded its feed on Vercel. Members must sign in at the new address, replace old home-screen shortcuts, and enable notifications on the new origin. Existing Netlify-origin phone subscriptions do not receive Vercel notifications.
+
+Validation: 114 automated tests and production build pass, including backend ESM imports, deletion/version/membership rules, linked-task preservation, Google deletion retries, private-store isolation, transient OAuth token handling, shared rate limits and cron authorization. Live Vercel checks cover Google owner sign-in, existing athlete/calendar records, login relay creation/polling/completion/origin rejection/cleanup, authenticated cron execution, unauthenticated cron rejection, installation assets and browser-bundle secret exclusion. No existing production events were deleted during verification. Real two-account production onboarding, email delivery and physical iPhone push acceptance are not claimed by these checks.
+
+Database advisors retain the existing intentional security-definer RPC and private-table deny-by-default patterns, the existing password-protection setting, and existing index advisories. The new deletion RPC explicitly enforces membership/version checks; private-store and worker RPCs are service-only.
+
 ## Native team calendar, November 11, 2026
 
 Calendar now opens directly to Motion OS’s own **Month** view, with **Day** and **Week** options. Day/week show hourly slots, separate overlapping events, and keep all-day events visible while scrolling. Previous/next, Today, a date picker, athlete/type filters, and an agenda work on desktop and mobile. Week scrolls horizontally within the calendar on small screens. Clicking a date opens its day; clicking a time or New event opens the existing editor with that date/time filled in.
@@ -94,12 +110,13 @@ All editors have a definite viewport-bounded height, a vertically scrolling body
 
 ## Resources to reuse
 
-- [Netlify project](https://app.netlify.com/projects/motion-team-os): `076a97b9-2021-4a62-b1a5-3d39f1e05a4b`.
+- [Vercel project](https://vercel.com/cbarbricks-projects/motion-team-os): `prj_PVcXgG8gJOGU2rpbP2YpplBobQMk`.
+- Legacy [Netlify project](https://app.netlify.com/projects/motion-team-os): `076a97b9-2021-4a62-b1a5-3d39f1e05a4b`.
 - [Supabase project](https://supabase.com/dashboard/project/morugcmqedreoyawlept): `morugcmqedreoyawlept`, Motion OS in cbarbrick’s Org, US East.
 - [Google Auth Platform](https://console.cloud.google.com/auth/overview?project=motion-os-512705): `motion-os-512705`, under the user-confirmed `cbdplususa.com` organization. Support/contact: `char@motionbrand.com`.
 - Google OAuth client: Motion OS Web. JavaScript origin `https://motion-team-os.netlify.app`; callback `https://morugcmqedreoyawlept.supabase.co/auth/v1/callback`.
-- Supabase Site URL and allowed return URL: `https://motion-team-os.netlify.app`. Localhost is not allowlisted.
-- Google client secret is stored in Supabase’s provider configuration and the production Netlify function secret used for calendar token refresh. It is never included in frontend variables or Git.
+- Supabase Site URL: `https://motion-team-os.vercel.app`. Both the new and legacy Netlify return URLs are allowed during transition. Localhost is not allowlisted.
+- Google client secret is stored in Supabase’s provider configuration and the production Vercel server secret used for calendar token refresh. It is never included in frontend variables or Git.
 
 ## Run and deploy
 
@@ -109,10 +126,13 @@ npm run dev
 npm test
 npm run build
 node --env-file=.env.local tests/live-access.mjs
-npx netlify-cli deploy --site 076a97b9-2021-4a62-b1a5-3d39f1e05a4b --dir dist --prod --no-build
+vercel link --project motion-team-os --scope cbarbricks-projects
+vercel project inspect --non-interactive
+vercel deploy --prod --skip-domain
+# Verify the staged production deployment, then: vercel promote <deployment-url>
 ```
 
-`.env.local` contains only the project URL, publishable browser key and auth feature flags. Both it and `.netlify/` are ignored. Never put a service-role key or OAuth secret in a `VITE_` variable. Current flags: `VITE_GOOGLE_AUTH_ENABLED=true`, `VITE_EMAIL_AUTH_ENABLED=false`. There is no Git continuous deployment attached. Manual deploys are atomic.
+`.env.local` contains only the project URL, publishable browser key and auth feature flags. It, `.vercel/`, and legacy `.netlify/` are ignored. Never put a service-role key or OAuth secret in a `VITE_` variable. Current flags: `VITE_GOOGLE_AUTH_ENABLED=true`, `VITE_EMAIL_AUTH_ENABLED=false`. Vercel deploys the GitHub `main` branch automatically. Manual staged deploys are also supported.
 
 ## Workflow and saving
 

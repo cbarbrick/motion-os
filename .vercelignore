@@ -1,0 +1,8 @@
+output/
+.netlify/
+.env*
+tests/
+supabase/
+*.log
+*.tsbuildinfo
+.DS_Store

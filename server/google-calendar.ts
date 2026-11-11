@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { Item } from "../../src/model";
+import type { Item } from "../src/model.js";
 export const googleScope =
   "https://www.googleapis.com/auth/calendar.app.created";
 const base = "https://www.googleapis.com/calendar/v3";
@@ -108,6 +108,44 @@ export function googleEvent(item: Item) {
   };
 }
 export const googleEventId = (id: string) => `motion${id.replaceAll("-", "")}`;
+export async function deleteGoogleEvent(
+  token: string,
+  calendarId: string,
+  itemId: string,
+  workspace: string,
+  fetcher = fetch,
+) {
+  const path = `/calendars/${encodeURIComponent(calendarId)}/events/${googleEventId(itemId)}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const existing = await googleRequest(token, path, {}, fetcher);
+    if ([404, 410].includes(existing.status)) return;
+    if (!existing.ok)
+      throw new CalendarError(
+        "Google deletion is unavailable. Motion OS will retry automatically.",
+      );
+    const event = await existing.json();
+    if (event.status === "cancelled") return;
+    if (
+      event.extendedProperties?.private?.motionItem !== itemId ||
+      event.extendedProperties?.private?.motionWorkspace !== workspace
+    )
+      throw new CalendarError("Google event does not match this workspace.");
+    const removed = await googleRequest(
+      token,
+      `${path}?sendUpdates=none`,
+      {
+        method: "DELETE",
+        headers: { "If-Match": event.etag },
+      },
+      fetcher,
+    );
+    if (removed.ok || [404, 410].includes(removed.status)) return;
+    if (removed.status !== 412) break;
+  }
+  throw new CalendarError(
+    "Google deletion is unavailable. Motion OS will retry automatically.",
+  );
+}
 export async function syncGoogleEvent(
   token: string,
   calendarId: string,
@@ -208,7 +246,7 @@ export async function listGoogleEvents(
   fetcher = fetch,
 ) {
   const range = calendarRange(start, end);
-  const events: import("../../src/calendar-feed").GoogleEvent[] = [];
+  const events: import("../src/calendar-feed").GoogleEvent[] = [];
   let page: string | undefined;
   const seenPages = new Set<string>();
   for (let count = 0; count < 10; count++) {

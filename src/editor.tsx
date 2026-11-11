@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, X } from "lucide-react";
+import { Check, Trash2, X } from "lucide-react";
 import {
   blankInput,
   addDays,
@@ -26,6 +26,7 @@ export function Editor({
   preview,
   initial,
   onSave,
+  onDelete,
   onClose,
   onOpen,
   onNewTask,
@@ -38,6 +39,7 @@ export function Editor({
   preview: boolean;
   initial?: Partial<ItemInput>;
   onSave: (kind: Kind, item: Item | null, input: ItemInput) => Promise<Item>;
+  onDelete: (item: Item) => Promise<void>;
   onClose: () => void;
   onOpen: (item: Item) => void;
   onNewTask: (eventId: string, category: string) => void;
@@ -70,6 +72,9 @@ export function Editor({
     [busy, setBusy] = useState(false),
     [storageFailure, setStorageFailure] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleting = useRef(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false),
     [photoRevision, setPhotoRevision] = useState(0);
   const photosRef = useRef<PendingPhoto[]>([]);
@@ -125,7 +130,13 @@ export function Editor({
     );
   }
   async function flush() {
-    if (saving.current || photoBusy || !editable || !valid(latest.current))
+    if (
+      saving.current ||
+      deleting.current ||
+      photoBusy ||
+      !editable ||
+      !valid(latest.current)
+    )
       return;
     saving.current = true;
     setBusy(true);
@@ -195,11 +206,16 @@ export function Editor({
     };
   }, []);
   useEffect(() => {
-    if (!item || JSON.stringify(form) === lastSaved.current || !editable)
+    if (
+      !item ||
+      JSON.stringify(form) === lastSaved.current ||
+      !editable ||
+      confirmDelete
+    )
       return;
     const timer = setTimeout(() => void flush(), 800);
     return () => clearTimeout(timer);
-  }, [form]); // autosave serialized by flush
+  }, [form, confirmDelete]); // autosave serialized by flush
   useEffect(() => {
     const unload = (e: BeforeUnloadEvent) => {
       if (
@@ -219,7 +235,7 @@ export function Editor({
       ? data.items.filter((i) => i.kind === "task" && i.event_id === item?.id)
       : [];
   async function close(): Promise<boolean> {
-    if (saving.current || photoBusy) return false;
+    if (saving.current || deleting.current || photoBusy) return false;
     if (
       current.current &&
       editable &&
@@ -240,6 +256,30 @@ export function Editor({
     onClose();
     return true;
   }
+  function cancelDelete() {
+    deleting.current = false;
+    setConfirmDelete(false);
+    deleteButton.current?.focus();
+  }
+  async function remove() {
+    if (!current.current || saving.current || photoBusy) return;
+    saving.current = true;
+    setBusy(true);
+    setFailure("");
+    try {
+      await onDelete(current.current);
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+      photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
+      onClose();
+    } catch (error) {
+      setFailure((error as Error).message);
+    } finally {
+      saving.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
   return (
     <dialog
       ref={dialog}
@@ -247,7 +287,8 @@ export function Editor({
       aria-labelledby="item-editor-title"
       onCancel={(e) => {
         e.preventDefault();
-        close();
+        if (confirmDelete && !busy) cancelDelete();
+        else close();
       }}
     >
       <div className="editor-header">
@@ -267,13 +308,13 @@ export function Editor({
         <button
           className="icon-button"
           aria-label="Close details"
-          disabled={busy || photoBusy}
+          disabled={busy || photoBusy || confirmDelete}
           onClick={close}
         >
           <X size={20} />
         </button>
       </div>
-      <div className="editor-body">
+      <div className="editor-body" inert={confirmDelete}>
         {!editable && (
           <div className="notice">
             You can view this item. Only its creator can make changes.
@@ -787,32 +828,88 @@ export function Editor({
         )}
       </div>
       <div className="editor-footer">
-        <span role="status">{state || (item ? "Autosave on" : "")}</span>
-        {!item || pendingPhotos.length > 0 ? (
-          <button
-            className="button primary"
-            disabled={busy || photoBusy || !valid(form)}
-            onClick={async () => {
-              await flush();
-              if (
-                current.current &&
-                photosRef.current.length === 0 &&
-                lastSaved.current === JSON.stringify(latest.current)
-              )
-                onClose();
-            }}
+        {confirmDelete ? (
+          <div
+            className="delete-confirmation"
+            role="alertdialog"
+            aria-labelledby="delete-item-title"
+            aria-describedby="delete-item-description"
           >
-            Save
-            <Check size={16} />
-          </button>
+            <h3 id="delete-item-title">Delete this {kind}?</h3>
+            <p id="delete-item-description">
+              “{current.current?.title}” will be permanently removed.
+              {kind === "event" && " Linked tasks will stay in the workspace."}
+            </p>
+            {failure && (
+              <p className="error" role="alert">
+                {failure}
+              </p>
+            )}
+            <div className="editor-actions">
+              <button
+                className="button"
+                disabled={busy}
+                autoFocus
+                onClick={cancelDelete}
+              >
+                Keep {kind}
+              </button>
+              <button
+                className="button delete-button"
+                disabled={busy}
+                onClick={remove}
+              >
+                {busy ? "Deleting…" : `Delete ${kind}`}
+              </button>
+            </div>
+          </div>
         ) : (
-          <button
-            className="button"
-            disabled={busy || photoBusy}
-            onClick={close}
-          >
-            Close
-          </button>
+          <>
+            <span role="status">{state || (item ? "Autosave on" : "")}</span>
+            <div className="editor-actions">
+              {item && (kind === "event" || kind === "task") && (
+                <button
+                  ref={deleteButton}
+                  className="button delete-button"
+                  disabled={busy || photoBusy}
+                  onClick={() => {
+                    deleting.current = true;
+                    setFailure("");
+                    setConfirmDelete(true);
+                  }}
+                >
+                  <Trash2 size={16} />
+                  Delete
+                </button>
+              )}
+              {!item || pendingPhotos.length > 0 ? (
+                <button
+                  className="button primary"
+                  disabled={busy || photoBusy || !valid(form)}
+                  onClick={async () => {
+                    await flush();
+                    if (
+                      current.current &&
+                      photosRef.current.length === 0 &&
+                      lastSaved.current === JSON.stringify(latest.current)
+                    )
+                      onClose();
+                  }}
+                >
+                  Save
+                  <Check size={16} />
+                </button>
+              ) : (
+                <button
+                  className="button"
+                  disabled={busy || photoBusy}
+                  onClick={close}
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </dialog>
