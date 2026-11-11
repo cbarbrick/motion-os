@@ -1,17 +1,16 @@
-import type { Context, Config } from "@netlify/functions";
 import {
   pushRuntime,
   pushJson,
   pushAuthorize,
   drainPush,
   PushError,
-} from "../lib/push-runtime";
-import { pushPayload, validPushTarget } from "../lib/push";
-export default async (request: Request, context: Context) => {
+} from "../push-runtime.js";
+import { pushPayload, validPushTarget } from "../push.js";
+export default async (request: Request) => {
   try {
     if (!["GET", "POST"].includes(request.method))
       return pushJson({ error: "Use GET or POST." }, 405);
-    const rt = pushRuntime(context);
+    const rt = pushRuntime();
     if (request.method === "GET") return pushJson({ publicKey: rt.publicKey });
     const user = await pushAuthorize(request, rt);
     const raw = await request.text();
@@ -74,12 +73,4 @@ export default async (request: Request, context: Context) => {
       e instanceof PushError ? e.status : 503,
     );
   }
-};
-export const config: Config = {
-  rateLimit: {
-    action: "rate_limit",
-    aggregateBy: "ip",
-    windowSize: 60,
-    windowLimit: 60,
-  },
 };

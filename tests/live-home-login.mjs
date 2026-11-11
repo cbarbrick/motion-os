@@ -3,7 +3,7 @@ import {randomBytes,createHash} from 'node:crypto';
 const origin=new URL(process.argv[2]||'http://localhost:8888').origin;
 const secret=()=>randomBytes(32).toString('hex'), hash=v=>createHash('sha256').update(v).digest('hex');
 const read=secret(),write=secret();
-async function post(endpoint,body,requestOrigin=origin){return fetch(origin+'/.netlify/functions/'+endpoint,{method:'POST',headers:{origin:requestOrigin,'content-type':'application/json'},body:JSON.stringify(body)});}
+async function post(endpoint,body,requestOrigin=origin){return fetch(origin+'/api/'+endpoint,{method:'POST',headers:{origin:requestOrigin,'content-type':'application/json'},body:JSON.stringify(body)});}
 const created=await post('app-login-start',{readHash:hash(read),writeHash:hash(write)});
 assert.equal(created.status,201,'create ticket');const {id}=await created.json();
 try {

@@ -4,13 +4,13 @@ import {readFile} from 'node:fs/promises';
 import {createHash,randomBytes} from 'node:crypto';
 import ts from 'typescript';
 import {createClient} from '@supabase/supabase-js';
-const source=await readFile(new URL('../netlify/lib/home-login.ts',import.meta.url),'utf8');
+const source=await readFile(new URL('../server/home-login.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {startLogin,relayLogin}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
 const origin='https://motion.example.test';
 const hash=s=>createHash('sha256').update(s).digest('hex');
 function store(){const records=new Map();return {records,get:async key=>records.get(key)||null,setJSON:async(key,value)=>{if(records.has(key))return {modified:false};records.set(key,structuredClone(value));return {modified:true};},delete:async key=>{records.delete(key);}};}
-const request=(body,headers={})=>new Request(origin+'/.netlify/functions/app-login',{method:'POST',headers:{origin,'content-type':'application/json',...headers},body:JSON.stringify(body)});
+const request=(body,headers={})=>new Request(origin+'/api/app-login',{method:'POST',headers:{origin,'content-type':'application/json',...headers},body:JSON.stringify(body)});
 async function ticket(s,now=Date.now()) {const read=randomBytes(32).toString('hex'),write=randomBytes(32).toString('hex');const response=await startLogin(request({readHash:hash(read),writeHash:hash(write)}),s,now);assert.equal(response.status,201);return {...await response.json(),read,write};}
 
 test('login relay separates read/write secrets, keeps codes immutable and deletes on finish',async()=>{

@@ -1289,6 +1289,18 @@ svg {
 .danger {
   color: #bc7d6b;
 }
+.editor-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.editor-footer .delete-button { color: #a42f36; border-color: #e8b9bc; }
+.delete-confirmation { width: 100%; min-width: 0; }
+.delete-confirmation h3 { margin: 0 0 8px; }
+.delete-confirmation p { margin: 0 0 12px; overflow-wrap: anywhere; }
+.delete-confirmation .editor-actions > button { flex: 1; min-height: 44px; }
+@media (max-width: 650px) {
+  .editor-footer { flex-wrap: wrap; }
+  .editor-footer > span { flex-basis: 100%; }
+  .editor-footer > .editor-actions { width: 100%; }
+  .editor-footer > .editor-actions > button { flex: 1; min-height: 44px; }
+}
 .editor {
   width: min(640px, calc(100vw - 28px));
   max-height: calc(100dvh - 40px);

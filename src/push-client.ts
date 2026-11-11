@@ -152,7 +152,7 @@ export async function pushRequest(body: Record<string, string>) {
   const session = await supabase!.auth.getSession();
   const token = session.data.session?.access_token;
   if (!token) throw new Error("Sign in first.");
-  const response = await fetch("/.netlify/functions/push-notifications", {
+  const response = await fetch("/api/push-notifications", {
     method: "POST",
     headers: {
       "content-type": "application/json",

@@ -433,6 +433,37 @@ export function useWorkspace() {
     if (kind === "event" || kind === "task") dispatchPush(data.workspace.id);
     return updated;
   }
+  async function remove(item: Item) {
+    if (!data) throw new Error("Workspace is loading");
+    if (!preview) {
+      if (!online) throw new Error("Connect to the internet before deleting.");
+      const result = await supabase!.rpc("delete_item", {
+        p_workspace: data.workspace.id,
+        p_id: item.id,
+        p_version: item.version,
+      });
+      if (result.error) throw result.error;
+      ++requestGeneration.current;
+    }
+    const withoutItem = (snapshot: Snapshot): Snapshot => ({
+      ...snapshot,
+      items: snapshot.items
+        .filter((i) => i.id !== item.id)
+        .map((i) =>
+          i.event_id === item.id
+            ? { ...i, event_id: null, version: i.version + 1 }
+            : i,
+        ),
+      notifications: snapshot.notifications.filter(
+        (n) => n.item_id !== item.id,
+      ),
+    });
+    if (preview) setPreviewData(withoutItem(data));
+    else {
+      setData((prev) => (prev ? withoutItem(prev) : prev));
+      if (item.kind === "event") kickCalendarSync(data.workspace.id);
+    }
+  }
   async function readNotifications(id: string | null = null) {
     if (!data) return;
     const workspace = data.workspace.id,
@@ -719,6 +750,7 @@ export function useWorkspace() {
       if (preview) setPreviewData(makeDemo());
     },
     save,
+    remove,
     claim,
     readNotifications,
     saveSponsorship,

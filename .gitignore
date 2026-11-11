@@ -8,3 +8,4 @@ output/
 supabase/.temp/
 .DS_Store
 *.log
+.vercel

@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
-import type { Context } from "@netlify/functions";
-import { deliverPushJobs, type PushJob, type PushTarget } from "./push";
+import { deliverPushJobs, type PushJob, type PushTarget } from "./push.js";
 export class PushError extends Error {
   constructor(
     message: string,
@@ -10,16 +9,16 @@ export class PushError extends Error {
     super(message);
   }
 }
-export function pushRuntime(context: Context) {
-  if (context.deploy.context !== "production")
+export function pushRuntime() {
+  if (process.env.VERCEL_ENV !== "production")
     throw new PushError(
       "Phone notifications are available on the live Motion OS site.",
       403,
     );
-  const url = Netlify.env.get("CALENDAR_SUPABASE_URL"),
-    secret = Netlify.env.get("CALENDAR_SUPABASE_SECRET");
-  const publicKey = Netlify.env.get("PUSH_VAPID_PUBLIC_KEY"),
-    privateKey = Netlify.env.get("PUSH_VAPID_PRIVATE_KEY");
+  const url = process.env.CALENDAR_SUPABASE_URL,
+    secret = process.env.CALENDAR_SUPABASE_SECRET;
+  const publicKey = process.env.PUSH_VAPID_PUBLIC_KEY,
+    privateKey = process.env.PUSH_VAPID_PRIVATE_KEY;
   if (!url || !secret || !publicKey || !privateKey)
     throw new PushError(
       "Phone notifications are not ready. Try again shortly.",
@@ -70,7 +69,7 @@ export async function drainPush(
   rt: ReturnType<typeof pushRuntime>,
   workspace: string | null,
 ) {
-  const result = await rt.db.rpc("claim_push_deliveries", {
+  const result = await rt.db.rpc("claim_push_deliveries_v2", {
     p_workspace: workspace,
   });
   if (result.error) throw new Error("Push queue unavailable");

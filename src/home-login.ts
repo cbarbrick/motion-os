@@ -50,7 +50,7 @@ export function savePending(value: PendingLogin) {
     throw new Error("Allow website storage to stay signed in.");
 }
 export async function loginRequest(endpoint: string, body: object) {
-  const response = await fetch(`/.netlify/functions/${endpoint}`, {
+  const response = await fetch(`/api/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

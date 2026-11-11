@@ -27,7 +27,7 @@ export function PushSettings({
     setDevice(null);
     void Promise.all([
       devicePushState(),
-      fetch("/.netlify/functions/push-notifications").then(async (r) => {
+      fetch("/api/push-notifications").then(async (r) => {
         const data = await r.json();
         if (!r.ok)
           throw new Error(data.error || "Phone notifications are unavailable.");

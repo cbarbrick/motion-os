@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarDays, ExternalLink, RefreshCw } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./client";
+import {
+  clearGoogleToken,
+  googleRefreshToken,
+} from "./google-connection-token";
 import { calendarAction, pendingCalendarKey } from "./calendar-sync";
 import type { CalendarConnection, CalendarFeed } from "./calendar-feed";
 import type { Item } from "./model";
@@ -114,14 +118,22 @@ export function GoogleCalendar({
       setError("Google connection expired. Try connecting again.");
       return;
     }
-    if (!session.provider_refresh_token) return;
+    const refreshToken =
+      googleRefreshToken(session.user.id) || session.provider_refresh_token;
+    if (!refreshToken) {
+      setError(
+        "Google did not finish connecting. Choose Reconnect Google to try again.",
+      );
+      return;
+    }
     connecting.current = true;
     setBusy("connect");
     void calendarAction("connect", workspace, {
-      refreshToken: session.provider_refresh_token,
+      refreshToken,
     })
       .then(async () => {
         sessionStorage.removeItem(pendingCalendarKey);
+        clearGoogleToken();
         await supabase!.auth.setSession({
           access_token: session.access_token,
           refresh_token: session.refresh_token,

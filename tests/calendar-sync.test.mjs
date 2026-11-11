@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import ts from 'typescript';
-const source=await readFile(new URL('../netlify/lib/google-calendar.ts',import.meta.url),'utf8');
+const source=await readFile(new URL('../server/google-calendar.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const {googleEvent,googleEventId,syncGoogleEvent,seal,unseal}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 const owner='00000000-0000-4000-8000-000000000001',member='00000000-0000-4000-8000-000000000002',outsider='00000000-0000-4000-8000-000000000003';
@@ -25,31 +25,31 @@ test('members can create shared events; outsiders cannot read sync status or edi
  await assert.rejects(as(outsider,"select public.save_item($1,'event',$2,1,$3)",[w,event.id,{title:'intrusion'}]),/Workspace access/);
  await assert.rejects(as(member,"update public.calendar_sync set synced_version=100"),/permission denied/);
  await assert.rejects(as(owner,"select public.register_google_calendar($1,$2,'calendar')",[w,owner]),/permission denied/);
- await assert.rejects(as(member,'select public.claim_calendar_sync($1)',[w]),/permission denied/);
+ await assert.rejects(as(member,'select public.claim_calendar_sync_v2($1)',[w]),/permission denied/);
 });
 test('only verified server registration connects a workspace, and existing events queue',async()=>{
- assert.equal((await worker('select public.claim_calendar_sync($1) as job',[w])).rows[0].job,null);
+ assert.equal((await worker('select public.claim_calendar_sync_v2($1) as job',[w])).rows[0].job,null);
  await assert.rejects(worker("select public.register_google_calendar($1,$2,'calendar')",[w,member]),/owner required/);
  await worker("select public.register_google_calendar($1,$2,'calendar')",[w,owner]);
  await assert.rejects(worker("select public.register_google_calendar($1,$2,'other')",[w,owner]),/already connected/);
  assert.equal((await as(member,'select * from public.calendar_connections')).rows[0].calendar_id,'calendar');
  assert.equal((await as(outsider,'select * from public.calendar_connections')).rows.length,0);
- job=(await worker('select public.claim_calendar_sync($1) as job',[w])).rows[0].job;
+ job=(await worker('select public.claim_calendar_sync_v2($1) as job',[w])).rows[0].job;
  assert.equal(job.event.id,event.id);
- assert.equal((await worker('select public.claim_calendar_sync($1) as job',[w])).rows[0].job,null);
+ assert.equal((await worker('select public.claim_calendar_sync_v2($1) as job',[w])).rows[0].job,null);
 });
 test('an edit during sync stays queued; stale completions cannot mark a newer event synced',async()=>{
  event=(await as(owner,"select * from public.save_item($1,'event',$2,$3,$4)",[w,event.id,event.version,{title:'Changed title'}])).rows[0];
  await worker('select public.finish_calendar_sync($1,$2,1,null)',[event.id,outsider]);
  assert.equal((await as(owner,'select synced_version from public.calendar_sync')).rows[0].synced_version,0);
  await worker('select public.finish_calendar_sync($1,$2,1,null)',[event.id,job.job.lease_id]);
- job=(await worker('select public.claim_calendar_sync($1) as job',[w])).rows[0].job;
+ job=(await worker('select public.claim_calendar_sync_v2($1) as job',[w])).rows[0].job;
  assert.equal(job.event.version,2);assert.equal(job.event.title,'Changed title');
  await worker('select public.finish_calendar_sync($1,$2,$3,$4)',[event.id,job.job.lease_id,2,'Google unavailable']);
  const status=(await as(owner,'select * from public.calendar_sync')).rows[0];
  assert.equal(status.synced_version,1);assert.equal(status.last_error,'Google unavailable');
  assert.ok(new Date(status.next_attempt_at)>new Date());
- assert.equal((await worker('select public.claim_calendar_sync($1) as job',[w])).rows[0].job,null);
+ assert.equal((await worker('select public.claim_calendar_sync_v2($1) as job',[w])).rows[0].job,null);
 });
 test('tasks and private to-dos never enter the calendar queue',async()=>{
  await as(member,"select public.save_item($1,'todo',null,0,$2)",[w,{title:'Private'}]);
