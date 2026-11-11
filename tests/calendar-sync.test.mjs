@@ -89,3 +89,13 @@ test('refresh credentials are encrypted and tampering is rejected',()=>{
  assert.throws(()=>unseal(encrypted,Buffer.alloc(32,4).toString('base64')));
 });
 test.after(()=>db.close());
+
+test('ordinary members add athlete events to the shared calendar and teammates can edit them',async()=>{
+ const athlete=(await as(member,'select * from public.save_sponsorship($1,null,0,$2)',[w,{athlete_name:'Shared calendar athlete',record_type:'athlete'}])).rows[0];
+ const created=(await as(member,"select * from public.save_item($1,'event',null,0,$2)",[w,{...eventInput,title:'Athlete media day',athlete_id:athlete.id,event_type:'event'}])).rows[0];
+ const shared=(await as(owner,"select * from public.items where workspace_id=$1 and kind='event' and athlete_id=$2",[w,athlete.id])).rows;
+ assert.equal(shared.length,1);assert.equal(shared[0].id,created.id);assert.equal(shared[0].created_by,member);
+ const edited=(await as(owner,"select * from public.save_item($1,'event',$2,$3,$4)",[w,created.id,created.version,{title:'Updated media day'}])).rows[0];
+ const seen=(await as(member,'select * from public.items where id=$1',[edited.id])).rows[0];assert.equal(seen.title,'Updated media day');assert.equal(seen.athlete_id,athlete.id);
+ assert.equal((await as(outsider,'select * from public.items where id=$1',[created.id])).rows.length,0);
+});

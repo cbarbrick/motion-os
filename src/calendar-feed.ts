@@ -37,19 +37,15 @@ export type CalendarEntry = Pick<
   pending: boolean;
 };
 
-// Google is the display source after a successful read. Unsynced OS edits take
-// precedence until Google reports the corresponding version, without duplicates.
+// Motion events are authoritative and never disappear because of Google sync.
+// Google-only events remain available as read-only additions to the calendar.
 export function calendarEntries(
   items: Item[],
   feed: CalendarFeed | null,
 ): CalendarEntry[] {
-  const local = new Map(
-    items
-      .filter((i) => i.kind === "event" && i.starts_at)
-      .map((i) => [i.id, i]),
-  );
-  const entries: CalendarEntry[] = [];
-  const addLocal = (item: Item, pending: boolean): CalendarEntry => ({
+  const local = items.filter((i) => i.kind === "event" && i.starts_at);
+  const ids = new Set(local.map((i) => i.id));
+  const entries: CalendarEntry[] = local.map((item) => ({
     id: item.id,
     title: item.title,
     description: item.description,
@@ -59,45 +55,25 @@ export function calendarEntries(
     all_day: item.all_day,
     item,
     google: false,
-    pending,
-  });
-  const byStart = (a: CalendarEntry, b: CalendarEntry) =>
-    Date.parse(a.starts_at) - Date.parse(b.starts_at) ||
-    a.id.localeCompare(b.id);
-  if (!feed?.connection)
-    return [...local.values()].map((i) => addLocal(i, false)).sort(byStart);
-  const seen = new Set<string>();
-  for (const remote of feed.events) {
-    const item = remote.motion_item ? local.get(remote.motion_item) : undefined;
-    if (item && remote.motion_version < item.version) {
-      if (!seen.has(item.id)) entries.push(addLocal(item, true));
-      seen.add(item.id);
-      continue;
-    }
-    if (item) seen.add(item.id);
-    const fields = {
-      title: remote.title,
-      description: remote.description,
-      location: remote.location,
-      starts_at: remote.starts_at,
-      ends_at: remote.ends_at,
-      all_day: remote.all_day,
-    };
+    pending:
+      !!feed?.connection &&
+      !feed.sync.some(
+        (s) => s.item_id === item.id && s.synced_version >= item.version,
+      ),
+  }));
+  for (const remote of feed?.events || []) {
+    if (remote.motion_item && ids.has(remote.motion_item)) continue;
     entries.push({
-      ...fields,
+      ...remote,
       id: `google:${remote.id}`,
-      item: item ? { ...item, ...fields } : null,
+      item: null,
       google: true,
       pending: false,
     });
   }
-  for (const item of local.values()) {
-    if (seen.has(item.id)) continue;
-    const synced = feed.sync.find((s) => s.item_id === item.id);
-    // An event already synced but absent from this Google range was moved or
-    // deleted in Google. Do not resurrect its old local copy.
-    if (!synced || synced.synced_version < item.version)
-      entries.push(addLocal(item, true));
-  }
-  return entries.sort(byStart);
+  return entries.sort(
+    (a, b) =>
+      Date.parse(a.starts_at) - Date.parse(b.starts_at) ||
+      a.id.localeCompare(b.id),
+  );
 }

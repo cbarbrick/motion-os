@@ -4,7 +4,6 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./client";
 import { calendarAction, pendingCalendarKey } from "./calendar-sync";
 import type { CalendarConnection, CalendarFeed } from "./calendar-feed";
-import { GoogleCalendarEmbed } from "./google-calendar-embed";
 import type { Item } from "./model";
 
 export function GoogleCalendar({
@@ -17,8 +16,6 @@ export function GoogleCalendar({
   end,
   onFeed,
   onOpen,
-  showEmbed,
-  onShowEvents,
 }: {
   preview: boolean;
   workspace: string;
@@ -29,8 +26,6 @@ export function GoogleCalendar({
   end: string;
   onFeed: (feed: CalendarFeed | null) => void;
   onOpen: (event: Item) => void;
-  showEmbed: boolean;
-  onShowEvents: () => void;
 }) {
   const [feed, setFeed] = useState<CalendarFeed | null>(null);
   const [connection, setConnection] = useState<CalendarConnection | null>(null);
@@ -65,8 +60,7 @@ export function GoogleCalendar({
       if (id === requestId.current) setLoading(false);
     }
   }, [preview, workspace, start, end, onFeed]);
-  // The widget only needs member-readable metadata. Keep it available even
-  // when the server's event feed is temporarily unavailable.
+  // Keep connection status available if the optional Google feed fails.
   useEffect(() => {
     if (preview || !supabase || !session?.user.id) return;
     let cancelled = false;
@@ -182,10 +176,6 @@ export function GoogleCalendar({
       setBusy(null);
     }
   }
-  const syncRevision = (feed?.sync || [])
-    .map((s) => `${s.item_id}:${s.synced_version}`)
-    .sort()
-    .join("|");
   const pending = events.filter(
     (e) =>
       !feed?.sync.some(
@@ -194,14 +184,6 @@ export function GoogleCalendar({
   );
   return (
     <>
-      {!preview && showEmbed && connection && (
-        <GoogleCalendarEmbed
-          calendarId={connection.calendar_id}
-          email={session?.user.email}
-          syncRevision={syncRevision}
-          onShowEvents={onShowEvents}
-        />
-      )}
       <section
         className="panel calendar-sync-panel"
         aria-label="Google Calendar connection"
@@ -213,19 +195,19 @@ export function GoogleCalendar({
               {preview
                 ? "Sample calendar"
                 : connection
-                  ? "Motion OS · Google Calendar"
+                  ? "Google Calendar sync"
                   : "Google Calendar"}
             </strong>
             <p>
               {preview
                 ? "Sample events stay in this browser."
                 : connection
-                  ? "Shared with your team. Add an event here to save it to Google Calendar."
+                  ? "Motion events save here first and sync to Google in the background."
                   : loading
-                    ? "Loading the shared Google Calendar…"
+                    ? "Checking Google sync…"
                     : error
-                      ? "Google Calendar could not be loaded."
-                      : "Connect Google once, then everyone in this workspace can view and add events here."}
+                      ? "Google sync is unavailable. Your Motion calendar still works."
+                      : "Your team calendar works without Google. Connect it if you also want a copy of events in Google Calendar."}
             </p>
           </div>
           {!preview && (
@@ -243,8 +225,8 @@ export function GoogleCalendar({
           <p className="notice error" role="alert">
             {error}
             {feed?.connection
-              ? " Showing the last loaded calendar and saved Motion events."
-              : " Your saved events are available in the event list."}
+              ? " Your Motion events remain saved and editable."
+              : " Your Motion events remain saved and editable."}
           </p>
         )}
         {message && (
