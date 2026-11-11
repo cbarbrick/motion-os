@@ -650,6 +650,7 @@ svg {
 }
 .item-end {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
@@ -2443,12 +2444,13 @@ body:has(dialog[open]) { overflow: hidden; }
 .simple-task { display: flex; align-items: center; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--line); }
 .simple-task:last-child { border-bottom: 0; }
 .simple-task > .done-button { flex: 0 0 auto; }
-.simple-task-main { flex: 1; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.simple-task-main { flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
 .simple-task-main strong { font-size: 16px; line-height: 1.45; }
 .simple-task-main span { font-size: 13px; line-height: 1.5; color: #526571; overflow-wrap: anywhere; }
 .simple-task-main small { font-size: 12px; }
 .simple-task-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
-.simple-task-actions button { min-height: 40px; font-size: 13px; }
+.simple-task-actions button { min-height: 44px; font-size: 13px; }
+.task-delete-button { color: #a42f36; min-height: 44px; padding: 8px; gap: 6px; flex-shrink: 0; }
 .completed-tasks { margin-top: 20px; padding: 0; }
 .completed-tasks > summary { padding: 20px 22px; cursor: pointer; }
 .completed-tasks .simple-task-main strong { text-decoration: line-through; color: #526571; }
@@ -2696,3 +2698,13 @@ body:has(dialog[open]) { overflow: hidden; }
 .native-all-day { z-index:5; }
 .native-all-day-label, .native-time-head { z-index:6; }
 .native-time-corner { z-index:7; }
+
+.editor.editor-delete[open] {
+  width: min(460px, calc(100% - 32px));
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.editor-delete .editor-body { display: none; }
+.editor-delete .editor-footer { overflow-y: auto; }
