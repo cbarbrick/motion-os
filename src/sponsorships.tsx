@@ -1013,7 +1013,7 @@ function SponsorshipDetails({
               onChange={(e) => change("proposal", e.target.value)}
               placeholder={
                 approval
-                  ? "What are you proposing, and what does the approver need to decide?"
+                  ? "What are you proposing, and what does the approver need to decide? Add URL here."
                   : "Background and proposed work"
               }
             />
