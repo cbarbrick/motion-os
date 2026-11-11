@@ -262,15 +262,18 @@ export function Editor({
   }, []);
   useEffect(() => {
     if (
-      (!pendingSave.current && JSON.stringify(form) === lastSaved.current) ||
+      (!pendingSave.current &&
+        JSON.stringify(form) === lastSaved.current &&
+        !pendingPhotos.length) ||
       !valid(form) ||
       !editable ||
+      photoBusy ||
       confirmDelete
     )
       return;
     const timer = setTimeout(() => void flush(), 500);
     return () => clearTimeout(timer);
-  }, [form, confirmDelete]); // autosave serialized by flush
+  }, [form, confirmDelete, photoBusy, pendingPhotos.length]); // autosave serialized by flush
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => {

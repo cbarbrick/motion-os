@@ -1271,6 +1271,16 @@ function SponsorshipDetails({
         {error && (
           <div className="notice error" role="alert">
             <p>{error}</p>
+            <button
+              className="text-button"
+              disabled={busy}
+              onClick={() => void flush()}
+            >
+              Retry save
+            </button>
+            <button className="text-button" disabled={busy} onClick={onClose}>
+              Close and keep my draft on this device
+            </button>
             {error.includes("changed") && (
               <>
                 <p>
