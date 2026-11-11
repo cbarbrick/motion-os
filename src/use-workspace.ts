@@ -306,6 +306,8 @@ export function useWorkspace() {
       if (identity.current === owner) setError((e as Error).message);
     }
   }, [preview, session, workspaceId]);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   useEffect(() => {
     if (preview) return;
     setData(null);
@@ -315,17 +317,31 @@ export function useWorkspace() {
   useEffect(() => {
     if (preview || !session) return;
     const timer = setInterval(refresh, 20000);
-    const focus = () => void refresh();
+    const focus = () => {
+      if (document.visibilityState !== "hidden") void refresh();
+    };
     window.addEventListener("focus", focus);
+    window.addEventListener("online", focus);
+    document.addEventListener("visibilitychange", focus);
     return () => {
       clearInterval(timer);
       window.removeEventListener("focus", focus);
+      window.removeEventListener("online", focus);
+      document.removeEventListener("visibilitychange", focus);
     };
   }, [refresh, preview, session]);
   useEffect(() => {
-    if (preview || !session || !supabase) return;
+    if (preview || !session || !supabase || !data?.workspace.id) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const changed = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        void refreshRef.current();
+      }, 100);
+    };
     const channel = supabase
-      .channel(`task-notifications:${session.user.id}`)
+      .channel(`workspace:${data.workspace.id}:${session.user.id}`)
       .on(
         "postgres_changes",
         {
@@ -334,15 +350,37 @@ export function useWorkspace() {
           table: "notifications",
           filter: `recipient_id=eq.${session.user.id}`,
         },
-        () => void refresh(),
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") void refresh();
-      });
+        changed,
+      );
+    for (const table of [
+      "items",
+      "sponsorships",
+      "sponsorship_comments",
+      "sponsorship_settings",
+      "activity",
+      "members",
+    ]) {
+      for (const event of ["INSERT", "UPDATE"] as const) {
+        channel.on(
+          "postgres_changes",
+          {
+            event,
+            schema: "public",
+            table,
+            filter: `workspace_id=eq.${data.workspace.id}`,
+          },
+          changed,
+        );
+      }
+    }
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") changed();
+    });
     return () => {
+      clearTimeout(timer);
       void supabase!.removeChannel(channel);
     };
-  }, [preview, session?.user.id, refresh]);
+  }, [preview, session?.user.id, data?.workspace.id]);
   function setPreviewData(next: Snapshot) {
     localStorage.setItem(previewKey, JSON.stringify(next));
     setData(next);
@@ -359,6 +397,7 @@ export function useWorkspace() {
     kind: Kind,
     item: Item | null,
     input: ItemInput,
+    request?: string,
   ): Promise<Item> {
     if (!data) throw new Error("Workspace is loading");
     if (preview) {
@@ -403,11 +442,12 @@ export function useWorkspace() {
       setPreviewData(next);
       return updated;
     }
-    if (!online)
+    if (!navigator.onLine)
       throw new Error(
         "You are offline. Your draft is kept on this device; retry when connected.",
       );
-    const r = await supabase!.rpc("save_item", {
+    const r = await supabase!.rpc(request ? "save_record" : "save_item", {
+      ...(request ? { p_request: request, p_entity: "item" } : {}),
       p_workspace: data.workspace.id,
       p_kind: kind,
       p_id: item?.id || null,
@@ -415,6 +455,10 @@ export function useWorkspace() {
       p_data: input,
     });
     if (r.error) throw r.error;
+    if (identity.current !== userId)
+      throw new Error(
+        "Account changed. Reopen this draft after signing in again.",
+      );
     ++requestGeneration.current;
     const updated = (Array.isArray(r.data) ? r.data[0] : r.data) as Item;
     if (!updated?.id || typeof updated.version !== "number")
@@ -422,7 +466,7 @@ export function useWorkspace() {
         "The server returned an unexpected save response. Refresh to check the saved record before retrying.",
       );
     setData((prev) =>
-      prev
+      prev?.workspace.id === data.workspace.id
         ? {
             ...prev,
             items: [updated, ...prev.items.filter((i) => i.id !== updated.id)],
@@ -507,6 +551,7 @@ export function useWorkspace() {
   async function saveSponsorship(
     item: Sponsorship | null,
     input: SponsorshipInput,
+    request?: string,
   ): Promise<Sponsorship> {
     if (!data) throw new Error("Workspace is loading");
     let saved: Sponsorship;
@@ -567,13 +612,27 @@ export function useWorkspace() {
         updated_at: now,
       };
     } else {
-      const r = await supabase!.rpc("save_sponsorship", {
-        p_workspace: data.workspace.id,
-        p_id: item?.id || null,
-        p_version: item?.version || 0,
-        p_data: input,
-      });
+      if (!navigator.onLine)
+        throw new Error(
+          "You are offline. Your draft is kept on this device; it will retry when connected.",
+        );
+      const r = await supabase!.rpc(
+        request ? "save_record" : "save_sponsorship",
+        {
+          ...(request
+            ? { p_request: request, p_entity: "sponsorship", p_kind: null }
+            : {}),
+          p_workspace: data.workspace.id,
+          p_id: item?.id || null,
+          p_version: item?.version || 0,
+          p_data: input,
+        },
+      );
       if (r.error) throw r.error;
+      if (identity.current !== userId)
+        throw new Error(
+          "Account changed. Reopen this draft after signing in again.",
+        );
       saved = r.data as Sponsorship;
     }
     updateSponsorshipData((prev) => ({

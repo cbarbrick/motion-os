@@ -214,7 +214,8 @@ export function ItemPhotos({
       if (photos.length + pending.length + files.length > 20)
         throw new Error("Up to 20 photos per item.");
       for (const file of files) selected.push(await prepare(file));
-      // Keep selections until Save; a failed upload leaves the remaining photos retryable.
+      // The editor uploads pending selections automatically once required fields
+      // are valid. A failed upload keeps the remaining photos retryable.
       onPending([...pendingRef.current, ...selected]);
     } catch (e) {
       selected.forEach((p) => URL.revokeObjectURL(p.url));
@@ -291,9 +292,9 @@ export function ItemPhotos({
       </p>
       {!!pending.length && (
         <p className="notice">
-          {pending.length} photo{pending.length === 1 ? "" : "s"} ready. Save to
-          upload. Unsaved photo selections stay here until you close this
-          editor.
+          {pending.length} photo{pending.length === 1 ? "" : "s"} waiting to
+          upload automatically once the required fields are filled. Keep this
+          editor open until uploading finishes.
         </p>
       )}
       {busy && <p role="status">Preparing photos…</p>}
