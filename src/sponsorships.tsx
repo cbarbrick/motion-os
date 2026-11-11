@@ -30,6 +30,12 @@ import {
   type ReviewStatus,
 } from "./model";
 import { eventStartDay, eventEndDay } from "./event-time";
+import {
+  beginSave,
+  readPendingSave,
+  rejectedSave,
+  type PendingSave,
+} from "./pending-save";
 import type { useWorkspace } from "./use-workspace";
 type Store = ReturnType<typeof useWorkspace>;
 type RecordType = SponsorshipInput["record_type"];
@@ -335,7 +341,6 @@ export function Sponsorships({
           proposal={selectedRecord}
           store={store}
           onClose={() => setSelected(null)}
-          onCreated={(s) => setSelected(s.id)}
           onCreateEvent={onCreateEvent}
           onOpenEvent={onOpenEvent}
         />
@@ -557,7 +562,6 @@ function SponsorshipDetails({
   proposal,
   store,
   onClose,
-  onCreated,
   type,
   approval,
   onCreateEvent,
@@ -570,13 +574,14 @@ function SponsorshipDetails({
   proposal: Sponsorship | null;
   store: Store;
   onClose: () => void;
-  onCreated: (s: Sponsorship) => void;
 }) {
   const athlete = type === "athlete";
   const copy =
     profileLabels[athlete ? "athlete" : approval ? "approval" : "person"];
   const key = `motion-sponsor-draft:${store.preview ? "sample" : "live"}:${store.userId}:${store.data!.workspace.id}:${proposal?.id || `new-${type}`}`;
   const draftBase = useRef<number | null>(null);
+  const draftRecord = useRef<Sponsorship | null>(null);
+  const pendingSave = useRef<PendingSave<SponsorshipInput> | null>(null);
   const [form, setForm] = useState<SponsorshipInput>(() => {
     try {
       const draft = JSON.parse(localStorage.getItem(key) || "null");
@@ -586,6 +591,14 @@ function SponsorshipDetails({
         Number.isInteger(draft.version)
       ) {
         draftBase.current = draft.version;
+        if (
+          draft.record?.workspace_id === store.data!.workspace.id &&
+          (!proposal || draft.record.id === proposal.id) &&
+          Number.isInteger(draft.record.version)
+        ) {
+          draftRecord.current = draft.record;
+        }
+        pendingSave.current = readPendingSave<SponsorshipInput>(draft.pending);
         if (approval)
           return {
             ...(proposal
@@ -601,7 +614,7 @@ function SponsorshipDetails({
     } catch {}
     return proposal ? sponsorshipInputOf(proposal) : blankSponsorship(type);
   });
-  const [record, setRecord] = useState(proposal),
+  const [record, setRecord] = useState(draftRecord.current || proposal),
     [comment, setComment] = useState(() => {
       try {
         return localStorage.getItem(key + ":comment") || "";
@@ -619,13 +632,13 @@ function SponsorshipDetails({
     form.record_type === "project" || form.record_type === "other";
   const dialog = useRef<HTMLDialogElement>(null),
     current = useRef(
-      proposal
-        ? { ...proposal, version: draftBase.current ?? proposal.version }
+      record
+        ? { ...record, version: draftBase.current ?? record.version }
         : null,
     ),
     latest = useRef(form),
     lastSaved = useRef(
-      proposal ? JSON.stringify(sponsorshipInputOf(proposal)) : "",
+      record ? JSON.stringify(sponsorshipInputOf(record)) : "",
     ),
     running = useRef(false),
     mounted = useRef(true),
@@ -642,7 +655,8 @@ function SponsorshipDetails({
       (a, b) =>
         a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
     );
-  const dirty = JSON.stringify(form) !== lastSaved.current;
+  const dirty =
+    !!pendingSave.current || JSON.stringify(form) !== lastSaved.current;
   useEffect(() => {
     mounted.current = true;
     dialog.current?.showModal();
@@ -654,7 +668,12 @@ function SponsorshipDetails({
     try {
       localStorage.setItem(
         key,
-        JSON.stringify({ form: next, version: current.current?.version || 0 }),
+        JSON.stringify({
+          form: next,
+          version: current.current?.version || 0,
+          record: current.current,
+          pending: pendingSave.current,
+        }),
       );
       setDraftWarning("");
     } catch {
@@ -697,13 +716,33 @@ function SponsorshipDetails({
     setError("");
     try {
       do {
-        const input = { ...latest.current };
+        if (!valid(latest.current)) {
+          setMessage(
+            "Complete the required fields to save · draft kept on this device",
+          );
+          return null;
+        }
+        if (
+          !pendingSave.current &&
+          current.current &&
+          JSON.stringify(latest.current) === lastSaved.current
+        )
+          break;
+        const pending = beginSave(pendingSave.current, latest.current);
+        pendingSave.current = pending;
+        remember(latest.current);
+        const input = pending.input;
         const json = JSON.stringify(input);
-        if (current.current && json === lastSaved.current) break;
         setMessage("Saving...");
-        const saved = await saveRef.current(current.current, input);
+        const saved = await saveRef.current(
+          current.current,
+          input,
+          pending.request,
+        );
         current.current = saved;
         lastSaved.current = json;
+        pendingSave.current = null;
+        remember(latest.current);
         if (!mounted.current) return saved;
         setRecord(saved);
         setMessage(
@@ -714,13 +753,13 @@ function SponsorshipDetails({
             localStorage.removeItem(key);
           } catch {}
         } else remember(latest.current);
-        if (!proposal) {
-          onCreated(saved);
-          return saved;
-        }
       } while (JSON.stringify(latest.current) !== lastSaved.current);
       return current.current;
     } catch (e) {
+      if (rejectedSave(e)) {
+        pendingSave.current = null;
+        remember(latest.current);
+      }
       if (mounted.current) {
         setError((e as Error).message);
         setMessage("Not saved");
@@ -732,16 +771,38 @@ function SponsorshipDetails({
     }
   }
   useEffect(() => {
-    if (!proposal || !valid(form) || JSON.stringify(form) === lastSaved.current)
+    if (
+      !valid(form) ||
+      (!pendingSave.current && JSON.stringify(form) === lastSaved.current)
+    )
       return;
-    const t = setTimeout(() => void flush(), 800);
+    const t = setTimeout(() => void flush(), 500);
     return () => clearTimeout(t);
   }, [form]);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => {
+    const save = () => {
+      if (valid(latest.current)) void flushRef.current();
+    };
+    window.addEventListener("online", save);
+    document.addEventListener("visibilitychange", save);
+    return () => {
+      window.removeEventListener("online", save);
+      document.removeEventListener("visibilitychange", save);
+    };
+  }, []);
+  useEffect(() => {
+    if (!error || busy || !pendingSave.current || !navigator.onLine) return;
+    const retry = setTimeout(() => void flushRef.current(), 5000);
+    return () => clearTimeout(retry);
+  }, [error, busy]);
   useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
       if (
         running.current ||
-        (current.current &&
+        !!pendingSave.current ||
+        (latest.current.athlete_name.trim() &&
           JSON.stringify(latest.current) !== lastSaved.current)
       )
         e.preventDefault();
@@ -752,8 +813,9 @@ function SponsorshipDetails({
   async function close() {
     if (running.current) return;
     if (
-      proposal &&
-      JSON.stringify(latest.current) !== lastSaved.current &&
+      (current.current || valid(latest.current)) &&
+      (pendingSave.current ||
+        JSON.stringify(latest.current) !== lastSaved.current) &&
       !(await flush())
     )
       return;
@@ -854,7 +916,7 @@ function SponsorshipDetails({
         {record && !athlete && record.status !== "pending" && (
           <p className="notice">Editing details requires a new review.</p>
         )}
-        <fieldset disabled={busy}>
+        <fieldset disabled={busy && !running.current}>
           {!athlete && (
             <label>
               Request approval from
@@ -1249,13 +1311,15 @@ function SponsorshipDetails({
         )}
       </div>
       <div className="editor-footer">
-        <span role="status">{message || (proposal ? "Autosave on" : "")}</span>
+        <span role="status">
+          {message || "Autosave on · saved after required fields are filled"}
+        </span>
         <button
           className="button primary"
-          disabled={busy || (!proposal && !valid(form))}
-          onClick={proposal ? close : () => void flush()}
+          disabled={busy || (!record && !valid(form))}
+          onClick={record ? close : () => void flush()}
         >
-          {busy ? "Saving..." : proposal ? "Close" : copy.add}
+          {busy ? "Saving..." : record ? "Close" : copy.add}
         </button>
       </div>
     </dialog>

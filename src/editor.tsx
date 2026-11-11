@@ -17,6 +17,12 @@ import {
 import { PeoplePicker } from "./people-picker";
 import { ItemPhotos, uploadItemPhoto, type PendingPhoto } from "./item-photos";
 import { eventStartDay, eventEndDay, localDateTime } from "./event-time";
+import {
+  beginSave,
+  readPendingSave,
+  rejectedSave,
+  type PendingSave,
+} from "./pending-save";
 const draftPrefix = "motion-draft-v1:";
 export function Editor({
   item,
@@ -38,7 +44,12 @@ export function Editor({
   userId: string;
   preview: boolean;
   initial?: Partial<ItemInput>;
-  onSave: (kind: Kind, item: Item | null, input: ItemInput) => Promise<Item>;
+  onSave: (
+    kind: Kind,
+    item: Item | null,
+    input: ItemInput,
+    request?: string,
+  ) => Promise<Item>;
   onDelete: (item: Item) => Promise<void>;
   onClose: () => void;
   onOpen: (item: Item) => void;
@@ -47,6 +58,8 @@ export function Editor({
 }) {
   const key = `${draftPrefix}${preview ? "sample" : "live"}:${userId}:${data.workspace.id}:${item?.id || kind}${!item && initial?.athlete_id ? ":" + initial.athlete_id : ""}`;
   const draftVersion = useRef<number | null>(null);
+  const draftRecord = useRef<Item | null>(null);
+  const pendingSave = useRef<PendingSave<ItemInput> | null>(null);
   const [form, setForm] = useState<ItemInput>(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -58,6 +71,15 @@ export function Editor({
           typeof d.form?.description === "string"
         ) {
           draftVersion.current = d.baseVersion;
+          if (
+            d.record?.workspace_id === data.workspace.id &&
+            d.record?.kind === kind &&
+            (!item || d.record.id === item.id) &&
+            Number.isInteger(d.record.version)
+          ) {
+            draftRecord.current = d.record;
+          }
+          pendingSave.current = readPendingSave<ItemInput>(d.pending);
           return withEventEnd({ ...blankInput(kind), ...d.form });
         }
       }
@@ -67,6 +89,7 @@ export function Editor({
       ...initial,
     });
   });
+  const [record, setRecord] = useState(draftRecord.current || item);
   const [state, setState] = useState(""),
     [failure, setFailure] = useState(""),
     [busy, setBusy] = useState(false),
@@ -84,22 +107,28 @@ export function Editor({
   }
   const latest = useRef(form),
     current = useRef(
-      item ? { ...item, version: draftVersion.current ?? item.version } : null,
+      record
+        ? { ...record, version: draftVersion.current ?? record.version }
+        : null,
     ),
-    lastSaved = useRef(item ? JSON.stringify(withEventEnd(inputOf(item))) : ""),
+    lastSaved = useRef(
+      record ? JSON.stringify(withEventEnd(inputOf(record))) : "",
+    ),
     saving = useRef(false),
     mounted = useRef(true),
     dialog = useRef<HTMLDialogElement>(null),
     saveRef = useRef(onSave);
   saveRef.current = onSave;
   latest.current = form;
-  const editable = kind !== "todo" || !item || item.created_by === userId;
+  const editable = kind !== "todo" || !record || record.created_by === userId;
   function remember(value: ItemInput) {
     try {
       localStorage.setItem(
         key,
         JSON.stringify({
           baseVersion: current.current?.version || 0,
+          record: current.current,
+          pending: pendingSave.current,
           form: value,
         }),
       );
@@ -117,7 +146,7 @@ export function Editor({
     setForm(next);
     remember(next);
     setFailure("");
-    setState(item ? "Unsaved changes" : "Draft saved on this device");
+    setState("Unsaved changes · draft kept on this device");
   }
   function valid(value: ItemInput) {
     return (
@@ -145,15 +174,37 @@ export function Editor({
       // Keep text changes made during an upload in the same serialized save.
       do {
         do {
-          const snapshot = structuredClone(latest.current),
+          if (!valid(latest.current)) {
+            setState(
+              "Complete the required fields to save · draft kept on this device",
+            );
+            return;
+          }
+          if (
+            !pendingSave.current &&
+            current.current &&
+            JSON.stringify(latest.current) === lastSaved.current
+          )
+            break;
+          const pending = beginSave(pendingSave.current, latest.current);
+          pendingSave.current = pending;
+          remember(latest.current);
+          const snapshot = pending.input,
             json = JSON.stringify(snapshot);
-          if (current.current && json === lastSaved.current) break;
           setState(preview ? "Saving to this browser..." : "Saving...");
-          const saved = await saveRef.current(kind, current.current, snapshot);
+          const saved = await saveRef.current(
+            kind,
+            current.current,
+            snapshot,
+            pending.request,
+          );
           current.current = saved;
           lastSaved.current = json;
-          if (!mounted.current) return;
+          pendingSave.current = null;
+          // Persist the acknowledged identity even if the dialog was closed.
           remember(latest.current);
+          if (!mounted.current) return;
+          setRecord(saved);
           setState(
             preview
               ? "Saved in this browser"
@@ -185,6 +236,10 @@ export function Editor({
         setStorageFailure(true);
       }
     } catch (e) {
+      if (rejectedSave(e)) {
+        pendingSave.current = null;
+        remember(latest.current);
+      }
       if (mounted.current) {
         setFailure((e as Error).message);
         setState(
@@ -207,21 +262,38 @@ export function Editor({
   }, []);
   useEffect(() => {
     if (
-      !item ||
-      JSON.stringify(form) === lastSaved.current ||
+      (!pendingSave.current && JSON.stringify(form) === lastSaved.current) ||
+      !valid(form) ||
       !editable ||
       confirmDelete
     )
       return;
-    const timer = setTimeout(() => void flush(), 800);
+    const timer = setTimeout(() => void flush(), 500);
     return () => clearTimeout(timer);
   }, [form, confirmDelete]); // autosave serialized by flush
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => {
+    const save = () => void flushRef.current();
+    window.addEventListener("online", save);
+    document.addEventListener("visibilitychange", save);
+    return () => {
+      window.removeEventListener("online", save);
+      document.removeEventListener("visibilitychange", save);
+    };
+  }, []);
+  useEffect(() => {
+    if (!failure || busy || !pendingSave.current || !navigator.onLine) return;
+    const retry = setTimeout(() => void flushRef.current(), 5000);
+    return () => clearTimeout(retry);
+  }, [failure, busy]);
   useEffect(() => {
     const unload = (e: BeforeUnloadEvent) => {
       if (
         saving.current ||
         photosRef.current.length > 0 ||
-        (current.current &&
+        !!pendingSave.current ||
+        (latest.current.title.trim() &&
           JSON.stringify(latest.current) !== lastSaved.current)
       ) {
         e.preventDefault();
@@ -232,14 +304,15 @@ export function Editor({
   }, []);
   const linked =
     kind === "event"
-      ? data.items.filter((i) => i.kind === "task" && i.event_id === item?.id)
+      ? data.items.filter((i) => i.kind === "task" && i.event_id === record?.id)
       : [];
   async function close(): Promise<boolean> {
     if (saving.current || deleting.current || photoBusy) return false;
     if (
-      current.current &&
       editable &&
-      (JSON.stringify(latest.current) !== lastSaved.current ||
+      (current.current || valid(latest.current)) &&
+      (pendingSave.current ||
+        JSON.stringify(latest.current) !== lastSaved.current ||
         photosRef.current.length > 0)
     ) {
       if (!valid(latest.current)) {
@@ -248,6 +321,7 @@ export function Editor({
       }
       await flush();
       if (
+        pendingSave.current ||
         JSON.stringify(latest.current) !== lastSaved.current ||
         photosRef.current.length
       )
@@ -294,7 +368,7 @@ export function Editor({
       <div className="editor-header">
         <div>
           <h2 id="item-editor-title">
-            {item
+            {record
               ? `Edit ${kind === "todo" ? "to-do" : kind}`
               : kind === "task"
                 ? "New task"
@@ -522,7 +596,7 @@ export function Editor({
               placeholder="Optional"
             />
           </label>
-          {item && (kind === "task" || kind === "todo") && (
+          {record && (kind === "task" || kind === "todo") && (
             <label className="check-label">
               <input
                 type="checkbox"
@@ -723,7 +797,7 @@ export function Editor({
             revision={photoRevision}
           />
         )}
-        {kind === "event" && item && (
+        {kind === "event" && record && (
           <section className="linked-tasks">
             <h3>Event tasks</h3>
             <div className="event-add-actions">
@@ -731,7 +805,7 @@ export function Editor({
                 className="button"
                 disabled={busy}
                 onClick={async () => {
-                  if (await close()) onNewTask(item.id, "Operations");
+                  if (await close()) onNewTask(record.id, "Operations");
                 }}
               >
                 Add task
@@ -740,7 +814,7 @@ export function Editor({
                 className="button"
                 disabled={busy}
                 onClick={async () => {
-                  if (await close()) onNewTask(item.id, "Content");
+                  if (await close()) onNewTask(record.id, "Content");
                 }}
               >
                 Add content task
@@ -771,12 +845,12 @@ export function Editor({
               Retry save
             </button>
             <p>Your draft has not replaced the version in the workspace.</p>
-            {item && (
+            {record && (
               <button
                 className="text-button"
                 disabled={busy}
                 onClick={() => {
-                  const remote = data.items.find((i) => i.id === item.id);
+                  const remote = data.items.find((i) => i.id === record.id);
                   if (!remote) return;
                   try {
                     localStorage.setItem(
@@ -786,6 +860,8 @@ export function Editor({
                   } catch {}
                   const next = withEventEnd(inputOf(remote));
                   current.current = remote;
+                  pendingSave.current = null;
+                  setRecord(remote);
                   latest.current = next;
                   lastSaved.current = JSON.stringify(next);
                   setForm(next);
@@ -793,6 +869,9 @@ export function Editor({
                   setState(
                     "Latest saved version loaded. Previous draft kept on this device.",
                   );
+                  try {
+                    localStorage.removeItem(key);
+                  } catch {}
                 }}
               >
                 Load latest saved version
@@ -865,9 +944,11 @@ export function Editor({
           </div>
         ) : (
           <>
-            <span role="status">{state || (item ? "Autosave on" : "")}</span>
+            <span role="status">
+              {state || "Autosave on · saved after required fields are filled"}
+            </span>
             <div className="editor-actions">
-              {item && (kind === "event" || kind === "task") && (
+              {record && (kind === "event" || kind === "task") && (
                 <button
                   ref={deleteButton}
                   className="button delete-button"
@@ -882,7 +963,7 @@ export function Editor({
                   Delete
                 </button>
               )}
-              {!item || pendingPhotos.length > 0 ? (
+              {!record || pendingPhotos.length > 0 ? (
                 <button
                   className="button primary"
                   disabled={busy || photoBusy || !valid(form)}

@@ -102,6 +102,12 @@ export function Welcome({ store }: { store: ReturnType<typeof useWorkspace> }) {
               : "Use your Google account."
             : "Open the sample workspace."}
         </p>
+        {supabase && !store.inviteToken && (
+          <p className="muted">
+            Already on the team? Use the same Google account to reopen your
+            workspace and saved work. You stay signed in on this device.
+          </p>
+        )}
         {supabase &&
           googleEnabled &&
           (homeScreen ? (
