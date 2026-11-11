@@ -294,6 +294,38 @@ export function Editor({
           </label>
           {kind === "event" && (
             <>
+              <div className="form-grid">
+                <label>
+                  Type
+                  <select
+                    value={form.event_type}
+                    onChange={(e) =>
+                      change("event_type", e.target.value as "fight" | "event")
+                    }
+                  >
+                    <option value="event">Event</option>
+                    <option value="fight">Fight</option>
+                  </select>
+                </label>
+                <label>
+                  Athlete
+                  <select
+                    value={form.athlete_id || ""}
+                    onChange={(e) =>
+                      change("athlete_id", e.target.value || null)
+                    }
+                  >
+                    <option value="">None</option>
+                    {data.sponsorships
+                      .filter((s) => s.record_type === "athlete")
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.athlete_name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
               <label className="check-label">
                 <input
                   type="checkbox"
@@ -605,41 +637,6 @@ export function Editor({
                 )}
                 {kind === "event" && (
                   <>
-                    <div className="form-grid">
-                      <label>
-                        Type
-                        <select
-                          value={form.event_type}
-                          onChange={(e) =>
-                            change(
-                              "event_type",
-                              e.target.value as "fight" | "event",
-                            )
-                          }
-                        >
-                          <option value="event">Event</option>
-                          <option value="fight">Fight</option>
-                        </select>
-                      </label>
-                      <label>
-                        Athlete
-                        <select
-                          value={form.athlete_id || ""}
-                          onChange={(e) =>
-                            change("athlete_id", e.target.value || null)
-                          }
-                        >
-                          <option value="">None</option>
-                          {data.sponsorships
-                            .filter((s) => s.record_type === "athlete")
-                            .map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.athlete_name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    </div>
                     <label>
                       Event lead
                       <select

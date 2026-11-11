@@ -6,6 +6,16 @@ Motion’s shared workspace for people, weekly deliverables, athletes, affiliate
 
 This repository contains the `motion-team-os` application. See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and the branch/pull-request workflow. New contributors can run the app in sample mode without production credentials. GitHub access and live app membership are managed separately.
 
+## Native team calendar, November 11, 2026
+
+Calendar now opens directly to Motion OS’s own **Month** view, with **Day** and **Week** options. Day/week show hourly slots, separate overlapping events, and keep all-day events visible while scrolling. Previous/next, Today, a date picker, athlete/type filters, and an agenda work on desktop and mobile. Week scrolls horizontally within the calendar on small screens. Clicking a date opens its day; clicking a time or New event opens the existing editor with that date/time filled in.
+
+Every active workspace member can add and edit shared calendar events through the existing authorized `save_item` RPC. **Athlete** and **Type** are now in the main event form. Events created from an athlete’s Add event action use the same shared records and appear in the calendar automatically; calendar events linked to an athlete also appear on their profile. Tasks and private to-dos stay out of the calendar. No schema, membership, RLS, or notification changes were required.
+
+The private Google iframe is removed. Motion’s saved event fields are authoritative and remain visible/editable regardless of Google sign-in, missing feed results, or sync errors. The existing optional server sync remains under **Google Calendar sync**. Google-only events can still appear as read-only additions when the feed is available; edits/deletions made to Google copies no longer override or hide Motion records. This section supersedes the Google-default display behavior described in the November 3 history below.
+
+Validation: production build and all 101 tests pass, including date/year boundaries, daylight-saving transitions, overlaps, all-day/overnight spans, native event visibility during Google failures, ordinary-member creation and editing of athlete-linked events, and outsider rejection. Browser checks in sample mode cover slot-prefilled creation, athlete-page creation appearing in the calendar, reload persistence, and Day/Week/Month layouts at desktop and mobile sizes. Sample checks do not claim a new two-account production sign-in test.
+
 ## Approval needed, November 3, 2026
 
 The former David’s approval page is now **Approval needed**, at the existing `#affiliates` route. **Submit for approval** has just **Request approval from**, **Title**, and **Description**. Submission type, category, budget and the entire More details section have been removed from the request editor. Existing saved information is retained, and older local drafts restore only the fields still shown. New submissions use the existing general request type. **Needs my approval** shows the signed-in teammate’s pending requests. Pending review and All requests show the wider workspace queue; cards identify each approver.

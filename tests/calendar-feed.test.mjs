@@ -12,19 +12,25 @@ const start='2026-11-01T04:00:00.000Z',end='2026-12-01T05:00:00.000Z';
 const local={id,workspace_id:workspace,kind:'event',title:'Local event',description:'Original',location:'Office',starts_at:'2026-11-05T15:00:00Z',ends_at:'2026-11-05T16:00:00Z',all_day:false,version:1};
 const remote={id:'google1',title:'Changed in Google',description:'Google details',location:'Studio',starts_at:'2026-11-05T17:00:00Z',ends_at:'2026-11-05T18:00:00Z',all_day:false,motion_item:id,motion_version:1};
 const feed={connection:{calendar_id:'shared@group.calendar.google.com',connected_by:user},events:[remote],sync:[{item_id:id,synced_version:1,requested_version:1,last_error:null}],range_start:start,range_end:end};
-test('Google changes are displayed once and linked OS events retain their editable identity',()=>{
- const entries=calendarEntries([local],feed);assert.equal(entries.length,1);assert.equal(entries[0].title,'Changed in Google');assert.equal(entries[0].starts_at,remote.starts_at);assert.equal(entries[0].item.id,id);assert.equal(entries[0].item.version,1);assert.equal(entries[0].google,true);
+test('Motion events stay authoritative and editable without duplicate Google copies',()=>{
+ const entries=calendarEntries([local],feed);
+ assert.equal(entries.length,1);assert.equal(entries[0].title,local.title);assert.equal(entries[0].starts_at,local.starts_at);assert.equal(entries[0].item.id,id);assert.equal(entries[0].google,false);
 });
-test('pending mobile edits take precedence until Google returns the new version',()=>{
+test('saved edits show immediately while optional sync is pending or complete',()=>{
  const edited={...local,title:'New mobile edit',version:2};let entries=calendarEntries([edited],feed);
- assert.equal(entries.length,1);assert.equal(entries[0].title,'New mobile edit');assert.equal(entries[0].pending,true);
- entries=calendarEntries([edited],{...feed,events:[{...remote,title:edited.title,motion_version:2}]});assert.equal(entries.length,1);assert.equal(entries[0].pending,false);assert.equal(entries[0].google,true);
+ assert.equal(entries.length,1);assert.equal(entries[0].title,edited.title);assert.equal(entries[0].pending,true);
+ entries=calendarEntries([edited],{...feed,sync:[{item_id:id,synced_version:2}],events:[{...remote,title:edited.title,motion_version:2}]});
+ assert.equal(entries.length,1);assert.equal(entries[0].pending,false);assert.equal(entries[0].item.version,2);
 });
-test('Google-only events appear, moved/deleted synced copies stay hidden, and unsynced new events remain visible',()=>{
+test('Google-only events supplement the calendar; Google deletion never hides saved athlete events',()=>{
  const external={...remote,id:'external',motion_item:null};
- let entries=calendarEntries([local],{...feed,events:[external]});assert.equal(entries.length,1);assert.equal(entries[0].item,null);
- entries=calendarEntries([{...local,version:2}],{...feed,events:[]});assert.equal(entries.length,1);assert.equal(entries[0].pending,true);
- assert.equal(calendarEntries([local],{...feed,events:[]}).length,0);
+ const athleteEvent={...local,athlete_id:'athlete',event_type:'fight'};
+ let entries=calendarEntries([athleteEvent],{...feed,events:[external]});
+ assert.equal(entries.length,2);assert.equal(entries.find(e=>e.google).item,null);
+ for(const current of [null,{...feed,events:[]}]) {
+  entries=calendarEntries([athleteEvent],current);
+  assert.equal(entries.length,1);assert.equal(entries[0].item.athlete_id,'athlete');assert.equal(entries[0].title,local.title);
+ }
 });
 test('sample/offline fallback excludes tasks and preserves missing end times',()=>{
  const entries=calendarEntries([{...local,ends_at:null},{...local,id:'private',kind:'todo'}],null);
