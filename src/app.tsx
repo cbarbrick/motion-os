@@ -50,6 +50,7 @@ import {
   type View,
 } from "./model";
 const nav = [
+  { id: "home", icon: Home },
   { id: "tasks", icon: ClipboardList },
   { id: "events", icon: CalendarDays },
   { id: "sponsorships", icon: Trophy },
@@ -57,7 +58,6 @@ const nav = [
   { id: "ideas", icon: Lightbulb },
   { id: "todos", icon: ListTodo },
   { id: "team", icon: Users },
-  { id: "home", icon: Home },
 ] as const;
 export function App() {
   const store = useWorkspace(),
